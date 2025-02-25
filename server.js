@@ -1,97 +1,116 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const fs = require('fs').promises;
 const cors = require('cors');
+const fs = require('fs').promises;
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static('public'));
 
-// File paths
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const USERS_FILE = path.join(__dirname, 'data', 'users.json');
 
-// Ensure data directory exists
-async function initializeDataStorage() {
+// Ensure users.json exists
+async function ensureUsersFile() {
     try {
-        await fs.mkdir(DATA_DIR, { recursive: true });
-        try {
-            await fs.access(USERS_FILE);
-        } catch {
-            await fs.writeFile(USERS_FILE, JSON.stringify([], null, 2));
-        }
-    } catch (error) {
-        console.error('Error initializing data storage:', error);
+        await fs.access(USERS_FILE);
+    } catch {
+        await fs.writeFile(USERS_FILE, '[]');
     }
 }
 
-// Initialize storage
-initializeDataStorage();
-
-// User data functions
-async function getUsers() {
-    try {
-        const data = await fs.readFile(USERS_FILE, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        return [];
-    }
+// Read users from file
+async function readUsers() {
+    await ensureUsersFile();
+    const data = await fs.readFile(USERS_FILE, 'utf8');
+    return JSON.parse(data);
 }
 
-async function saveUsers(users) {
+// Write users to file
+async function writeUsers(users) {
     await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-// Authentication Routes
-app.post('/api/auth/signup', async (req, res) => {
+// Find user by username
+async function findUser(username) {
+    const users = await readUsers();
+    return users.find(user => user.username === username);
+}
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.sendStatus(401);
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.sendStatus(403);
+        }
+        req.user = user;
+        next();
+    });
+};
+
+// Register endpoint
+app.post('/register', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        const users = await getUsers();
-        
-        // Check if user already exists
-        if (users.some(user => user.username === username)) {
+        // Validate input
+        if (!username || !password) {
+            return res.status(400).json({ message: 'Username and password are required' });
+        }
+
+        // Check if user exists
+        const existingUser = await findUser(username);
+        if (existingUser) {
             return res.status(400).json({ message: 'Username already exists' });
         }
 
-        // Hash password
+        // Hash password and create user
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create new user
+        const users = await readUsers();
         const newUser = {
             id: Date.now().toString(),
             username,
             password: hashedPassword,
-            chips: 1000
+            chips: 1000 // Starting chips
         };
-
+        
         users.push(newUser);
-        await saveUsers(users);
+        await writeUsers(users);
 
         res.status(201).json({ message: 'User created successfully' });
     } catch (error) {
-        console.error('Signup error:', error);
+        console.error('Registration error:', error);
         res.status(500).json({ message: 'Error creating user' });
     }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+// Login endpoint
+app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        const users = await getUsers();
-        const user = users.find(u => u.username === username);
-
+        // Find user
+        const user = await findUser(username);
         if (!user) {
             return res.status(400).json({ message: 'User not found' });
         }
@@ -103,29 +122,78 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         // Create token
-        const token = jwt.sign(
-            { userId: user.id },
-            process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: '24h' }
-        );
-
-        res.json({ token });
+        const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET);
+        res.json({ token, username: user.username, chips: user.chips });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ message: 'Error logging in' });
     }
 });
 
-// Socket.IO connection handling
+// Update chips endpoint
+app.post('/update-chips', authenticateToken, async (req, res) => {
+    try {
+        const { username, chips } = req.body;
+        const users = await readUsers();
+        const userIndex = users.findIndex(u => u.username === username);
+        
+        if (userIndex === -1) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        users[userIndex].chips = chips;
+        await writeUsers(users);
+        res.json({ message: 'Chips updated successfully' });
+    } catch (error) {
+        console.error('Update chips error:', error);
+        res.status(500).json({ message: 'Error updating chips' });
+    }
+});
+
+// Socket.IO game logic
+const games = new Map();
+const playerStates = new Map();
+
 io.on('connection', (socket) => {
     console.log('New client connected');
 
+    socket.on('joinGame', (username) => {
+        playerStates.set(socket.id, { username, ready: false });
+        socket.join('game-room');
+        io.to('game-room').emit('playerJoined', username);
+    });
+
+    socket.on('ready', (data) => {
+        const player = playerStates.get(socket.id);
+        if (player) {
+            player.ready = true;
+            io.to('game-room').emit('playerReady', player.username);
+        }
+    });
+
+    socket.on('placeBet', (data) => {
+        io.to('game-room').emit('betPlaced', {
+            username: data.username,
+            amount: data.amount
+        });
+    });
+
+    socket.on('action', (data) => {
+        io.to('game-room').emit('playerAction', {
+            username: data.username,
+            action: data.action
+        });
+    });
+
     socket.on('disconnect', () => {
-        console.log('Client disconnected');
+        const player = playerStates.get(socket.id);
+        if (player) {
+            io.to('game-room').emit('playerLeft', player.username);
+            playerStates.delete(socket.id);
+        }
     });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
