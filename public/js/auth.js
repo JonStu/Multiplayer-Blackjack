@@ -8,6 +8,86 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     const playerNameSpan = document.getElementById('player-name');
 
+    // Auth endpoints
+    const API_BASE = '/blackjack';
+    const AUTH_ENDPOINTS = {
+        login: `${API_BASE}/login`,
+        register: `${API_BASE}/register`,
+        updateChips: `${API_BASE}/update-chips`
+    };
+
+    async function login(username, password) {
+        try {
+            const response = await fetch(AUTH_ENDPOINTS.login, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Login failed');
+            }
+
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('username', data.username);
+            localStorage.setItem('chips', data.chips);
+            return data;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
+        }
+    }
+
+    async function register(username, password) {
+        try {
+            const response = await fetch(AUTH_ENDPOINTS.register, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Registration failed');
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Registration error:', error);
+            throw error;
+        }
+    }
+
+    async function updateChips(username, chips) {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(AUTH_ENDPOINTS.updateChips, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ username, chips })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to update chips');
+            }
+
+            localStorage.setItem('chips', chips);
+            return data;
+        } catch (error) {
+            console.error('Update chips error:', error);
+            throw error;
+        }
+    }
+
     // Show/hide forms
     showSignupLink.addEventListener('click', (e) => {
         e.preventDefault();
@@ -27,26 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('password').value;
 
         try {
-            const response = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('username', username);
-                showGameInterface(username);
-            } else {
-                alert(data.message || 'Login failed');
-            }
+            const data = await login(username, password);
+            showGameInterface(data.username);
         } catch (error) {
-            console.error('Login error:', error);
-            alert('Login failed. Please try again.');
+            alert(error.message || 'Login failed');
         }
     });
 
@@ -56,26 +120,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const password = document.getElementById('new-password').value;
 
         try {
-            const response = await fetch('/api/auth/signup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                alert('Account created successfully! Please log in.');
-                signupForm.classList.add('hidden');
-                loginForm.classList.remove('hidden');
-            } else {
-                alert(data.message || 'Signup failed');
-            }
+            await register(username, password);
+            alert('Account created successfully! Please log in.');
+            signupForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
         } catch (error) {
-            console.error('Signup error:', error);
-            alert('Signup failed. Please try again.');
+            alert(error.message || 'Signup failed');
         }
     });
 
@@ -83,6 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.addEventListener('click', () => {
         localStorage.removeItem('token');
         localStorage.removeItem('username');
+        localStorage.removeItem('chips');
         showAuthInterface();
     });
 

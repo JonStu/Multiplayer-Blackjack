@@ -8,18 +8,23 @@ const fs = require('fs').promises;
 const path = require('path');
 require('dotenv').config();
 
+// Load configuration based on environment
+const config = require(process.env.NODE_ENV === 'production' 
+    ? './config.production.js' 
+    : './config.development.js');
+
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
+const io = socketIo(server, config.socketIoSettings);
 
-app.use(cors());
+// Middleware
+app.use(cors({
+    origin: config.corsOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
 app.use(express.json());
-app.use(express.static('public'));
+app.use(config.baseUrl, express.static('public'));
 
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
 
@@ -69,7 +74,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Register endpoint
-app.post('/register', async (req, res) => {
+app.post(`${config.baseUrl}/register`, async (req, res) => {
     try {
         const { username, password } = req.body;
         
@@ -105,7 +110,7 @@ app.post('/register', async (req, res) => {
 });
 
 // Login endpoint
-app.post('/login', async (req, res) => {
+app.post(`${config.baseUrl}/login`, async (req, res) => {
     try {
         const { username, password } = req.body;
         
@@ -131,7 +136,7 @@ app.post('/login', async (req, res) => {
 });
 
 // Update chips endpoint
-app.post('/update-chips', authenticateToken, async (req, res) => {
+app.post(`${config.baseUrl}/update-chips`, authenticateToken, async (req, res) => {
     try {
         const { username, chips } = req.body;
         const users = await readUsers();
@@ -194,7 +199,7 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = config.port;
 server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
