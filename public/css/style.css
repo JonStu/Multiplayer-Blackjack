@@ -1,0 +1,653 @@
+:root {
+    --table-green: #35654d;
+    --dark-green: #264d3b;
+    --light-green: #488b68;
+    --gold: #d4af37;
+    --text-color: #ffffff;
+    --card-bg: #ffffff;
+    --border-radius: 8px;
+    --table-border: #d4af37;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    background-color: #1a1a1a;
+    color: var(--text-color);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Auth Styles */
+.auth-box {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 40px;
+    background-color: var(--dark-green);
+    border-radius: var(--border-radius);
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+    border: 2px solid var(--table-border);
+    position: relative;
+}
+
+.card-decoration {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.large-card {
+    width: 120px;
+    height: 168px;
+    background: white;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 48px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    color: #000;
+}
+
+.auth-box h2 {
+    text-align: center;
+    margin-bottom: 30px;
+    color: var(--gold);
+    font-size: 24px;
+}
+
+.auth-box input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 16px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.auth-box input::placeholder {
+    color: rgba(255,255,255,0.6);
+}
+
+.auth-box button {
+    width: 100%;
+    padding: 12px;
+    margin: 15px 0;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: var(--gold);
+    color: #000;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.auth-box button:hover {
+    transform: translateY(-2px);
+    background-color: #e5c04d;
+}
+
+.auth-box p {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.auth-box a {
+    color: var(--gold);
+    text-decoration: none;
+}
+
+/* Auth Container Styles */
+#auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: var(--table-green);
+}
+
+.auth-box {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 40px;
+    border-radius: var(--border-radius);
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    backdrop-filter: blur(4px);
+}
+
+.casino-decoration {
+    text-align: center;
+    margin-bottom: 30px;
+    position: relative;
+    z-index: 1;
+}
+
+.card-decoration {
+    display: flex;
+    justify-content: center;
+    gap: -60px; /* More overlap for the cards */
+    margin-bottom: 10px; /* Reduced margin to prevent overlap with text */
+    position: relative;
+    z-index: 1;
+    padding-top: 20px; /* Add some padding at the top */
+}
+
+.card-decoration .card {
+    width: 100px; /* Slightly smaller cards */
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease, z-index 0.3s ease;
+    position: relative;
+    background: white;
+}
+
+.card-decoration .card-heart {
+    transform: rotate(15deg); /* More rotation */
+    z-index: 1;
+}
+
+.card-decoration .card-spade {
+    transform: rotate(-15deg); /* More rotation */
+    z-index: 2;
+}
+
+.card-decoration .card:hover {
+    transform: rotate(0deg) translateY(-10px) scale(1.1); /* Added scale effect */
+    z-index: 3;
+}
+
+.casino-title {
+    color: var(--gold);
+    font-size: 48px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3),
+                 0 4px 8px rgba(0, 0, 0, 0.2);
+    margin: -10px 0 20px 0; /* Adjusted margin to prevent overlap */
+    font-family: 'Times New Roman', serif;
+    position: relative;
+    z-index: 2;
+    pointer-events: none; /* Prevent text selection */
+}
+
+.auth-form {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 30px;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    position: relative;
+    z-index: 2;
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.form-header h2 {
+    color: var(--gold);
+    font-size: 24px;
+    margin: 0 0 10px 0;
+}
+
+.subtitle {
+    color: #ccc;
+    margin: 0;
+    font-size: 14px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    color: var(--gold);
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 16px;
+}
+
+.input-wrapper input {
+    width: 100%;
+    padding: 12px 12px 12px 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: var(--border-radius);
+    color: white;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.input-wrapper input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--gold);
+}
+
+.input-wrapper input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.auth-button {
+    width: 100%;
+    padding: 14px;
+    background: var(--gold);
+    color: #2c3e50;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+}
+
+.auth-button:hover {
+    background: #ffd700;
+    transform: translateY(-2px);
+}
+
+.button-icon {
+    font-size: 20px;
+}
+
+.form-footer {
+    text-align: center;
+    margin-top: 20px;
+    color: #ccc;
+    font-size: 14px;
+}
+
+.form-footer a {
+    color: var(--gold);
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.form-footer a:hover {
+    color: #ffd700;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Insurance Styles */
+.insurance-prompt {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gold);
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    min-width: 250px;
+}
+
+.insurance-message {
+    color: var(--gold);
+    font-size: 24px;
+    margin-bottom: 15px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.insurance-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-bottom: 15px;
+}
+
+.insurance-button {
+    padding: 10px 25px;
+    font-size: 16px;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--gold);
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+.insurance-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.insurance-info {
+    color: #ccc;
+    font-size: 14px;
+}
+
+/* Game Table Styles */
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background-color: var(--dark-green);
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
+    border: 1px solid var(--table-border);
+}
+
+.player-info {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.chips-display {
+    background: rgba(0,0,0,0.3);
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gold);
+    color: var(--gold);
+}
+
+.game-table {
+    flex: 1;
+    background: var(--table-green);
+    border-radius: 20px;
+    padding: 40px;
+    position: relative;
+    box-shadow: 0 0 40px rgba(0,0,0,0.4);
+    border: 2px solid var(--table-border);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background-image: 
+        radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.2) 100%),
+        linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,0.05) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.05) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.05) 75%);
+    background-size: 100% 100%, 20px 20px, 20px 20px, 20px 20px, 20px 20px;
+}
+
+.dealer-section {
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.dealer-area {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 30px;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    margin-bottom: 20px;
+}
+
+.dealer-area h3 {
+    color: var(--gold);
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 24px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.table-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.message-area {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 15px 30px;
+    border-radius: var(--border-radius);
+    font-size: 20px;
+    color: var(--gold);
+    text-align: center;
+    min-height: 60px;
+    min-width: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.player-section {
+    padding: 20px;
+    margin-top: auto;
+}
+
+.player-area {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 30px;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    margin-bottom: 20px;
+}
+
+.cards {
+    display: flex;
+    gap: 15px;
+    min-height: 180px;
+    padding: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.card {
+    width: 120px;
+    height: 168px;
+    background-color: var(--card-bg);
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 28px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.3s;
+    position: relative;
+    border: 1px solid #ddd;
+}
+
+.card.red {
+    color: #e44145;
+}
+
+.card.black {
+    color: #2d2d2d;
+}
+
+.card::before {
+    content: attr(data-value);
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 24px;
+}
+
+.card::after {
+    content: attr(data-value);
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 24px;
+    transform: rotate(180deg);
+}
+
+.card.dealt {
+    animation: dealCard 0.5s ease-out;
+}
+
+@keyframes dealCard {
+    from {
+        transform: translateY(-100px) rotate(-10deg);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) rotate(0);
+        opacity: 1;
+    }
+}
+
+.controls-area {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.game-controls {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    border-radius: var(--border-radius);
+}
+
+.bet-controls {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    border-radius: var(--border-radius);
+}
+
+.score {
+    font-size: 1.4em;
+    margin: 15px 0;
+    text-align: center;
+    color: var(--gold);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    background: rgba(0, 0, 0, 0.4);
+    padding: 10px 20px;
+    border-radius: var(--border-radius);
+    display: inline-block;
+    min-width: 150px;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.game-controls button {
+    padding: 12px 30px;
+    min-width: 120px;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: var(--gold);
+    color: #000;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.game-controls button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    background-color: #e5c04d;
+}
+
+.game-controls button:disabled {
+    background-color: #666;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.bet-input-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+#bet-amount {
+    padding: 12px;
+    width: 120px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--gold);
+    background: rgba(0,0,0,0.3);
+    color: var(--gold);
+    font-size: 16px;
+    text-align: center;
+}
+
+#place-bet-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--border-radius);
+    background-color: var(--gold);
+    color: #000;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+#place-bet-btn:hover {
+    background-color: #e5c04d;
+    transform: translateY(-2px);
+}
+
+#logout-btn {
+    padding: 8px 16px;
+    background-color: rgba(220, 53, 69, 0.8);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#logout-btn:hover {
+    background-color: rgb(220, 53, 69);
+    transform: translateY(-2px);
+}
