@@ -7,86 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const showLoginLink = document.getElementById('show-login');
     const logoutBtn = document.getElementById('logout-btn');
     const playerNameSpan = document.getElementById('player-name');
-
-    // Auth endpoints
-    const API_BASE = '/blackjack';
-    const AUTH_ENDPOINTS = {
-        login: `${API_BASE}/login`,
-        register: `${API_BASE}/register`,
-        updateChips: `${API_BASE}/update-chips`
-    };
-
-    async function login(username, password) {
-        try {
-            const response = await fetch(AUTH_ENDPOINTS.login, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.message || 'Login failed');
-            }
-
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('username', data.username);
-            localStorage.setItem('chips', data.chips);
-            return data;
-        } catch (error) {
-            console.error('Login error:', error);
-            throw error;
-        }
-    }
-
-    async function register(username, password) {
-        try {
-            const response = await fetch(AUTH_ENDPOINTS.register, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.message || 'Registration failed');
-            }
-
-            return data;
-        } catch (error) {
-            console.error('Registration error:', error);
-            throw error;
-        }
-    }
-
-    async function updateChips(username, chips) {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(AUTH_ENDPOINTS.updateChips, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ username, chips })
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to update chips');
-            }
-
-            localStorage.setItem('chips', chips);
-            return data;
-        } catch (error) {
-            console.error('Update chips error:', error);
-            throw error;
-        }
-    }
+    const chipsDisplay = document.getElementById('chips-display');
 
     // Show/hide forms
     showSignupLink.addEventListener('click', (e) => {
@@ -106,11 +27,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
 
+        if (!username || !password) {
+            alert('Please enter both username and password');
+            return;
+        }
+
         try {
-            const data = await login(username, password);
-            showGameInterface(data.username);
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('username', data.username);
+                localStorage.setItem('chips', data.chips);
+                showGameInterface(data.username, data.chips);
+            } else {
+                alert(data.message || 'Login failed');
+            }
         } catch (error) {
-            alert(error.message || 'Login failed');
+            console.error('Login error:', error);
+            alert('Login failed. Please try again.');
         }
     });
 
@@ -119,13 +62,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = document.getElementById('new-username').value;
         const password = document.getElementById('new-password').value;
 
+        if (!username || !password) {
+            alert('Please enter both username and password');
+            return;
+        }
+
         try {
-            await register(username, password);
-            alert('Account created successfully! Please log in.');
-            signupForm.classList.add('hidden');
-            loginForm.classList.remove('hidden');
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert('Account created successfully! Please log in.');
+                signupForm.classList.add('hidden');
+                loginForm.classList.remove('hidden');
+                // Clear the signup form
+                document.getElementById('new-username').value = '';
+                document.getElementById('new-password').value = '';
+            } else {
+                alert(data.message || 'Signup failed');
+            }
         } catch (error) {
-            alert(error.message || 'Signup failed');
+            console.error('Signup error:', error);
+            alert('Signup failed. Please try again.');
         }
     });
 
@@ -140,18 +105,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if user is already logged in
     const token = localStorage.getItem('token');
     const username = localStorage.getItem('username');
+    const chips = localStorage.getItem('chips');
     if (token && username) {
-        showGameInterface(username);
+        showGameInterface(username, chips);
     }
 
-    function showGameInterface(username) {
+    function showGameInterface(username, chips) {
         authContainer.classList.add('hidden');
         gameContainer.classList.remove('hidden');
         playerNameSpan.textContent = username;
+        if (chipsDisplay) {
+            chipsDisplay.textContent = chips;
+        }
+        // Initialize the game
+        if (typeof initGame === 'function') {
+            initGame(username, chips);
+        }
     }
 
     function showAuthInterface() {
         gameContainer.classList.add('hidden');
         authContainer.classList.remove('hidden');
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
     }
 });

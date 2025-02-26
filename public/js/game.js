@@ -1,8 +1,6 @@
 class BlackjackGame {
     constructor() {
-        this.socket = io({
-            path: '/blackjack/socket.io'
-        });
+        this.socket = io();
         this.deck = this.createDeck();
         this.playerHand = [];
         this.dealerHand = [];
