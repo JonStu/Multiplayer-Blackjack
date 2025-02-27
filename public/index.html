@@ -110,17 +110,26 @@
                 </div>
 
                 <!-- Controls Area -->
-                <div class="controls-area">
-                    <div class="bet-controls">
-                        <div class="bet-input-group">
-                            <input type="number" id="bet-amount" min="1" value="10">
-                            <button id="place-bet-btn" class="btn">Place Bet</button>
-                        </div>
+                <div class="controls-section">
+                    <div class="player-info">
+                        <span id="player-name"></span>
+                        <span id="chips-count"></span>
+                    </div>
+                    <div class="betting-controls">
+                        <input type="number" id="bet-amount" min="1" value="10">
+                        <button id="place-bet-btn">Place Bet</button>
                     </div>
                     <div class="game-controls">
-                        <button id="hit-btn" class="btn" disabled>Hit</button>
-                        <button id="stand-btn" class="btn" disabled>Stand</button>
-                        <button id="deal-btn" class="btn">Deal</button>
+                        <button id="hit-btn" disabled>Hit</button>
+                        <button id="stand-btn" disabled>Stand</button>
+                        <button id="deal-btn" disabled>Deal</button>
+                    </div>
+                    <div class="chat-box">
+                        <div id="chat-messages"></div>
+                        <div class="chat-input">
+                            <input type="text" id="chat-input" placeholder="Type a message...">
+                            <button id="chat-send">Send</button>
+                        </div>
                     </div>
                 </div>
             </div>

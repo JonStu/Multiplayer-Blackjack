@@ -1,56 +1,80 @@
 # Multiplayer Blackjack
 
-A real-time multiplayer Blackjack game with user authentication.
+A real-time multiplayer Blackjack game built with Node.js, Express, and Socket.IO.
 
 ## Features
 
-- User authentication (signup/login)
-- Real-time gameplay using WebSocket
-- Smooth card dealing animations
-- Chip tracking system
-- Responsive design
-- Modern UI/UX
+- Real-time multiplayer gameplay
+- Intuitive turn-based system with alphabetical order
+- Betting system with chip tracking
+- Dealer AI that follows standard casino rules
+- Interactive chat system with game notifications
+- Modern, casino-themed UI with responsive design
+- Clear visual feedback for available actions
+- Insurance options for dealer blackjack
 
-## Prerequisites
+## Recent Updates
 
-- Node.js (v14 or higher)
-- MongoDB
-- npm or yarn
+- Added integrated chat system for player communication
+- Enhanced UI with improved button visibility and feedback
+- Implemented smart message deduplication
+- Added visual indicators for available actions
+- Improved betting controls and validation
+- Enhanced casino-themed color scheme
 
-## Installation
+## Technical Stack
 
-1. Clone the repository
+- **Backend**: Node.js, Express, Socket.IO
+- **Frontend**: Vanilla JavaScript, HTML5, CSS3
+- **Real-time Communication**: Socket.IO
+- **State Management**: Custom game state handler
+
+## Getting Started
+
+1. Clone the repository:
+```bash
+git clone https://github.com/JonStu/Multiplayer-Blackjack.git
+```
+
 2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Create a `.env` file in the root directory with:
-   ```
-   JWT_SECRET=your-secret-key
-   PORT=3000
-   ```
-4. Make sure MongoDB is running on your system
+```bash
+npm install
+```
 
-## Running the Application
+3. Start the server:
+```bash
+node server.js
+```
 
-1. Start the server:
-   ```bash
-   npm start
-   ```
-2. Visit `jonstu.dev/blackjack` in your browser
+4. Open your browser and navigate to `http://localhost:3000`
 
 ## Game Rules
 
-- Classic Blackjack rules
+- Players are dealt two cards initially
+- Players take turns in alphabetical order
+- Dealer always plays last
+- Players can Hit or Stand during their turn
 - Dealer must hit on 16 and stand on 17
+- Insurance is offered when dealer shows an Ace
 - Blackjack pays 3:2
-- Each player starts with 1000 chips
-- Minimum bet is 1 chip
+- Insurance pays 2:1
 
-## Technologies Used
+## UI Features
 
-- Frontend: HTML5, CSS3, JavaScript
-- Backend: Node.js, Express
-- Database: MongoDB
-- Real-time: Socket.IO
-- Authentication: JWT, bcrypt
+- Color-coded action buttons:
+  - Hit (Green)
+  - Stand (Red)
+  - Deal (Gold)
+  - Bet (Blue)
+- Visual feedback for available actions
+- Integrated chat system with game notifications
+- Real-time chip count and bet tracking
+- Responsive design for various screen sizes
+
+## Contributing
+
+Feel free to submit issues and enhancement requests!
+
+## License
+
+MIT License - see LICENSE file for details

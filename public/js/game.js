@@ -68,7 +68,10 @@ class BlackjackGame {
             acceptInsurance: document.getElementById('accept-insurance'),
             declineInsurance: document.getElementById('decline-insurance'),
             timerValue: document.getElementById('timer-value'),
-            playerName: document.getElementById('player-name')
+            playerName: document.getElementById('player-name'),
+            chatMessages: document.getElementById('chat-messages'),
+            chatInput: document.getElementById('chat-input'),
+            chatSend: document.getElementById('chat-send')
         };
 
         // Set player name
@@ -83,6 +86,14 @@ class BlackjackGame {
         this.elements.acceptInsurance.addEventListener('click', () => this.takeInsurance());
         this.elements.declineInsurance.addEventListener('click', () => this.hideInsurancePrompt());
         
+        // Add chat event listeners
+        this.elements.chatSend.addEventListener('click', () => this.sendChatMessage());
+        this.elements.chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.sendChatMessage();
+            }
+        });
+
         // Add bet input validation
         this.elements.betInput.addEventListener('input', (e) => {
             const value = parseInt(e.target.value);
@@ -109,6 +120,10 @@ class BlackjackGame {
 
         this.socket.on('gameStateUpdate', (data) => {
             this.updateGameState(data);
+        });
+
+        this.socket.on('chatMessage', (data) => {
+            this.addChatMessage(data.username, data.message, 'user');
         });
     }
 
@@ -497,17 +512,42 @@ class BlackjackGame {
         this.playerHand = [];
     }
 
-    showMessage(message, type = 'info', append = false) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        messageDiv.textContent = message;
-        
-        if (append) {
-            this.elements.messageArea.appendChild(messageDiv);
-        } else {
-            this.elements.messageArea.innerHTML = '';
-            this.elements.messageArea.appendChild(messageDiv);
+    sendChatMessage() {
+        const message = this.elements.chatInput.value.trim();
+        if (message) {
+            this.socket.emit('chatMessage', {
+                message,
+                tableId: this.tableId
+            });
+            this.elements.chatInput.value = '';
         }
+    }
+
+    addChatMessage(username, message, type = 'user') {
+        // Check if this is the same as the last message
+        const lastMessage = this.elements.chatMessages.lastElementChild;
+        if (lastMessage) {
+            const isDuplicate = lastMessage.textContent === (type === 'user' ? `${username}: ${message}` : message);
+            if (isDuplicate) return;
+        }
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${type}`;
+        
+        if (type === 'user') {
+            messageDiv.textContent = `${username}: ${message}`;
+        } else {
+            messageDiv.textContent = message;
+        }
+        
+        this.elements.chatMessages.appendChild(messageDiv);
+        this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    showMessage(message, type = 'system', append = false) {
+        // Don't show empty messages
+        if (!message) return;
+        this.addChatMessage(null, message, type);
     }
 
     updateChipsDisplay() {

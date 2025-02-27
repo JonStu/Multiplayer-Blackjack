@@ -260,32 +260,32 @@ class BlackjackTable {
     }
 
     dealInitialCards() {
-        this.state = 'playing';
-        
-        // Deal two cards to each player who bet
+        // Reset deck and shuffle
+        this.deck = new Deck();
+        this.deck.shuffle();
+
+        // Deal two cards to each player
         for (let i = 0; i < 2; i++) {
-            for (const player of this.players) {
-                if (player.bet > 0) {
-                    const card = this.deck.drawCard();
-                    player.cards.push(card);
-                }
+            for (const player of this.getPlayersInTurnOrder()) {
+                player.cards.push(this.deck.drawCard());
+                player.score = this.calculateScore(player.cards);
             }
-            // Deal to dealer
-            const card = this.deck.drawCard();
-            this.dealer.cards.push(card);
+            // Deal to dealer last
+            this.dealer.cards.push(this.deck.drawCard());
+            this.dealer.score = this.calculateScore(this.dealer.cards);
         }
 
-        // Set scores
-        for (const player of this.players) {
-            player.score = this.calculateScore(player.cards);
-        }
-        this.dealer.score = this.calculateScore(this.dealer.cards);
+        this.state = 'playing';
+        // Set first player's turn (alphabetical order)
+        this.currentTurn = this.getPlayersInTurnOrder()[0].username;
+        this.broadcastGameState();
+    }
 
-        // Find first player who placed a bet
-        const firstPlayer = this.players.find(p => p.bet > 0);
-        if (firstPlayer) {
-            this.currentTurn = firstPlayer.username;
-        }
+    getPlayersInTurnOrder() {
+        // Get all players who have placed bets, sorted alphabetically by username
+        return this.players
+            .filter(p => p.bet > 0)
+            .sort((a, b) => a.username.localeCompare(b.username));
     }
 
     placeBet(socketId, amount) {
@@ -340,28 +340,43 @@ class BlackjackTable {
     }
 
     nextTurn(currentPlayer) {
-        const activePlayers = this.players.filter(p => p.bet > 0);
+        const activePlayers = this.getPlayersInTurnOrder();
         const currentPlayerIndex = activePlayers.findIndex(p => p.username === currentPlayer.username);
         
-        if (currentPlayerIndex === activePlayers.length - 1 || !activePlayers.some(p => p.status === 'active')) {
-            this.startDealerTurn();
+        // If all players have played, it's dealer's turn
+        if (currentPlayerIndex === activePlayers.length - 1 || currentPlayerIndex === -1) {
+            this.state = 'dealer';
+            this.currentTurn = null;
+            this.playDealerTurn();
         } else {
-            const nextPlayer = activePlayers.find(p => 
-                p.status === 'active' && 
-                activePlayers.indexOf(p) > currentPlayerIndex
-            );
-            if (nextPlayer) {
-                this.currentTurn = nextPlayer.username;
-            } else {
-                this.startDealerTurn();
-            }
+            // Move to next player
+            this.currentTurn = activePlayers[currentPlayerIndex + 1].username;
         }
+        
+        this.broadcastGameState();
     }
 
-    startDealerTurn() {
-        this.state = 'dealer';
-        this.currentTurn = null;
-        this.startDealerTimer();
+    playDealerTurn() {
+        // Dealer must hit on 16 and below, stand on 17 and above
+        const dealerPlay = () => {
+            if (this.dealer.score < 17) {
+                this.dealer.cards.push(this.deck.drawCard());
+                this.dealer.score = this.calculateScore(this.dealer.cards);
+                
+                if (this.dealer.score < 17) {
+                    // Schedule next card draw with delay
+                    setTimeout(dealerPlay, 1000);
+                } else {
+                    this.endRound();
+                }
+                this.broadcastGameState();
+            } else {
+                this.endRound();
+                this.broadcastGameState();
+            }
+        };
+
+        dealerPlay();
     }
 
     endRound() {
@@ -585,6 +600,21 @@ io.on('connection', (socket) => {
         
         // Broadcast the updated state
         io.to(tableId).emit('gameStateUpdate', table.getGameState());
+    });
+
+    socket.on('chatMessage', async (data) => {
+        const { message, tableId } = data;
+        const table = GameState.tables.get(tableId);
+        if (!table) return;
+
+        const player = table.players.find(p => p.socketId === socket.id);
+        if (!player) return;
+
+        // Broadcast the chat message to all players at the table
+        io.to(tableId).emit('chatMessage', {
+            username: player.username,
+            message: message
+        });
     });
 });
 
