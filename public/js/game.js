@@ -71,7 +71,8 @@ class BlackjackGame {
             playerName: document.getElementById('player-name'),
             chatMessages: document.getElementById('chat-messages'),
             chatInput: document.getElementById('chat-input'),
-            chatSend: document.getElementById('chat-send')
+            chatSend: document.getElementById('chat-send'),
+            lobbyList: document.getElementById('lobby-list')
         };
 
         // Set player name
@@ -253,6 +254,7 @@ class BlackjackGame {
     }
 
     updateGameState(state) {
+        this.updateLobby(state);
         // Update dealer's cards
         if (state.dealer) {
             this.dealerHand = state.dealer.cards;
@@ -353,6 +355,68 @@ class BlackjackGame {
         if (state.dealer?.cards[0]?.value === 'A' && !this.hasInsurance) {
             this.offerInsurance();
         }
+    }
+
+    updateLobby(gameState) {
+        const lobbyList = this.elements.lobbyList;
+        lobbyList.innerHTML = '';
+
+        const players = gameState.players || [];
+        const currentTurn = gameState.currentPlayer;
+
+        players.forEach(player => {
+            const playerDiv = document.createElement('div');
+            playerDiv.className = `lobby-player${player.username === currentTurn ? ' current-turn' : ''}`;
+
+            // Player name and chips
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'player-name';
+            nameSpan.textContent = player.username;
+            
+            const chipsSpan = document.createElement('span');
+            chipsSpan.className = 'player-chips';
+            chipsSpan.textContent = `${player.chips} chips`;
+
+            // Player status
+            const statusSpan = document.createElement('span');
+            statusSpan.className = 'player-status';
+            if (player.username === currentTurn) {
+                statusSpan.textContent = 'Playing';
+                statusSpan.classList.add('status-playing');
+            } else if (player.bet > 0) {
+                statusSpan.textContent = 'Waiting';
+                statusSpan.classList.add('status-waiting');
+            } else {
+                statusSpan.textContent = 'Betting';
+                statusSpan.classList.add('status-betting');
+            }
+
+            // Player hand
+            const handDiv = document.createElement('div');
+            handDiv.className = 'player-hand';
+            
+            if (player.hand && player.hand.length > 0) {
+                player.hand.forEach(card => {
+                    if (card.hidden && player.username !== this.username) {
+                        const cardImg = document.createElement('img');
+                        cardImg.src = '/img/cards/back.png';
+                        cardImg.alt = 'Hidden Card';
+                        handDiv.appendChild(cardImg);
+                    } else {
+                        const cardImg = document.createElement('img');
+                        cardImg.src = `/img/cards/${card.value}_of_${card.suit}.png`;
+                        cardImg.alt = `${card.value} of ${card.suit}`;
+                        handDiv.appendChild(cardImg);
+                    }
+                });
+            }
+
+            playerDiv.appendChild(nameSpan);
+            playerDiv.appendChild(statusSpan);
+            playerDiv.appendChild(handDiv);
+            playerDiv.appendChild(chipsSpan);
+            lobbyList.appendChild(playerDiv);
+        });
     }
 
     showRoundEndMessage(state, player) {
