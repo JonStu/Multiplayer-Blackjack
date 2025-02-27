@@ -1,132 +1,141 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const authContainer = document.getElementById('auth-container');
-    const gameContainer = document.getElementById('game-container');
-    const loginForm = document.getElementById('login-form');
-    const signupForm = document.getElementById('signup-form');
-    const showSignupLink = document.getElementById('show-signup');
-    const showLoginLink = document.getElementById('show-login');
-    const logoutBtn = document.getElementById('logout-btn');
-    const playerNameSpan = document.getElementById('player-name');
-    const chipsDisplay = document.getElementById('chips-display');
+/**
+ * Authentication Module
+ * Handles user registration, login, and UI state management
+ */
 
-    // Show/hide forms
-    showSignupLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        loginForm.classList.add('hidden');
-        signupForm.classList.remove('hidden');
-    });
+class AuthManager {
+    constructor() {
+        this.initializeElements();
+        this.attachEventListeners();
+        this.checkAuthState();
+    }
 
-    showLoginLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        signupForm.classList.add('hidden');
-        loginForm.classList.remove('hidden');
-    });
+    initializeElements() {
+        this.elements = {
+            authContainer: document.getElementById('auth-container'),
+            gameContainer: document.getElementById('game-container'),
+            loginForm: document.getElementById('login-form'),
+            signupForm: document.getElementById('signup-form'),
+            showSignupLink: document.getElementById('show-signup'),
+            showLoginLink: document.getElementById('show-login'),
+            logoutBtn: document.getElementById('logout-btn'),
+            playerNameSpan: document.getElementById('player-name'),
+            username: document.getElementById('username'),
+            password: document.getElementById('password'),
+            newUsername: document.getElementById('new-username'),
+            newPassword: document.getElementById('new-password')
+        };
+    }
 
-    // Handle login
-    document.getElementById('login-btn').addEventListener('click', async () => {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
+    attachEventListeners() {
+        // Form switching
+        this.elements.showSignupLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.toggleForms('signup');
+        });
 
-        if (!username || !password) {
-            alert('Please enter both username and password');
-            return;
-        }
+        this.elements.showLoginLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.toggleForms('login');
+        });
 
+        // Auth actions
+        document.getElementById('login-btn').addEventListener('click', () => this.login());
+        document.getElementById('signup-btn').addEventListener('click', () => this.register());
+        this.elements.logoutBtn?.addEventListener('click', () => this.logout());
+    }
+
+    toggleForms(show) {
+        this.elements.loginForm.classList.toggle('hidden', show === 'signup');
+        this.elements.signupForm.classList.toggle('hidden', show === 'login');
+    }
+
+    async login() {
         try {
-            const response = await fetch('/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
+            const response = await this.sendRequest('/login', {
+                username: this.elements.username.value,
+                password: this.elements.password.value
             });
 
-            const data = await response.json();
-
             if (response.ok) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('username', data.username);
-                localStorage.setItem('chips', data.chips);
-                showGameInterface(data.username, data.chips);
+                const data = await response.json();
+                this.handleSuccessfulAuth(data);
             } else {
-                alert(data.message || 'Login failed');
+                const error = await response.json();
+                throw new Error(error.message);
             }
         } catch (error) {
-            console.error('Login error:', error);
-            alert('Login failed. Please try again.');
+            this.showError(error.message || 'Login failed');
         }
-    });
+    }
 
-    // Handle signup
-    document.getElementById('signup-btn').addEventListener('click', async () => {
-        const username = document.getElementById('new-username').value;
-        const password = document.getElementById('new-password').value;
-
-        if (!username || !password) {
-            alert('Please enter both username and password');
-            return;
-        }
-
+    async register() {
         try {
-            const response = await fetch('/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username, password }),
+            const response = await this.sendRequest('/register', {
+                username: this.elements.newUsername.value,
+                password: this.elements.newPassword.value
             });
 
-            const data = await response.json();
-
             if (response.ok) {
-                alert('Account created successfully! Please log in.');
-                signupForm.classList.add('hidden');
-                loginForm.classList.remove('hidden');
-                // Clear the signup form
-                document.getElementById('new-username').value = '';
-                document.getElementById('new-password').value = '';
+                this.showSuccess('Account created! Please log in.');
+                this.toggleForms('login');
             } else {
-                alert(data.message || 'Signup failed');
+                const error = await response.json();
+                throw new Error(error.message);
             }
         } catch (error) {
-            console.error('Signup error:', error);
-            alert('Signup failed. Please try again.');
+            this.showError(error.message || 'Registration failed');
         }
-    });
+    }
 
-    // Handle logout
-    logoutBtn.addEventListener('click', () => {
+    async sendRequest(endpoint, data) {
+        return fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    }
+
+    handleSuccessfulAuth(data) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('username', data.username);
+        this.showGameInterface(data.username);
+    }
+
+    showGameInterface(username) {
+        this.elements.authContainer.classList.add('hidden');
+        this.elements.gameContainer.classList.remove('hidden');
+        this.elements.playerNameSpan.textContent = username;
+    }
+
+    showAuthInterface() {
+        this.elements.gameContainer.classList.add('hidden');
+        this.elements.authContainer.classList.remove('hidden');
+        this.toggleForms('login');
+    }
+
+    logout() {
         localStorage.removeItem('token');
         localStorage.removeItem('username');
-        localStorage.removeItem('chips');
-        showAuthInterface();
-    });
-
-    // Check if user is already logged in
-    const token = localStorage.getItem('token');
-    const username = localStorage.getItem('username');
-    const chips = localStorage.getItem('chips');
-    if (token && username) {
-        showGameInterface(username, chips);
+        this.showAuthInterface();
     }
 
-    function showGameInterface(username, chips) {
-        authContainer.classList.add('hidden');
-        gameContainer.classList.remove('hidden');
-        playerNameSpan.textContent = username;
-        if (chipsDisplay) {
-            chipsDisplay.textContent = chips;
-        }
-        // Initialize the game
-        if (typeof initGame === 'function') {
-            initGame(username, chips);
+    checkAuthState() {
+        const token = localStorage.getItem('token');
+        const username = localStorage.getItem('username');
+        if (token && username) {
+            this.showGameInterface(username);
         }
     }
 
-    function showAuthInterface() {
-        gameContainer.classList.add('hidden');
-        authContainer.classList.remove('hidden');
-        loginForm.classList.remove('hidden');
-        signupForm.classList.add('hidden');
+    showError(message) {
+        alert(message);
     }
-});
+
+    showSuccess(message) {
+        alert(message);
+    }
+}
+
+// Initialize auth manager when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => new AuthManager());

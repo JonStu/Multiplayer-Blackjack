@@ -3,133 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Blackjack</title>
+    <title>Multiplayer Blackjack</title>
     <link rel="stylesheet" href="css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div id="auth-container" class="container">
+    <!-- Auth Container -->
+    <div id="auth-container">
         <div class="auth-box">
             <div class="casino-decoration">
                 <div class="card-decoration">
-                    <img src="https://deckofcardsapi.com/static/img/KS.png" alt="King of Spades" class="card card-spade">
-                    <img src="https://deckofcardsapi.com/static/img/KH.png" alt="King of Hearts" class="card card-heart">
+                    <img src="img/spade.png" alt="Spade" class="card card-spade">
+                    <img src="img/heart.png" alt="Heart" class="card card-heart">
                 </div>
                 <h1 class="casino-title">Blackjack</h1>
             </div>
             
-            <div id="login-form" class="auth-form">
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
                 <div class="form-header">
                     <h2>Welcome Back</h2>
-                    <p class="subtitle">Place your bets and beat the dealer!</p>
+                    <p class="subtitle">Login to continue playing</p>
                 </div>
                 <div class="form-group">
                     <label for="username">Username</label>
                     <div class="input-wrapper">
-                        <span class="input-icon">👤</span>
-                        <input type="text" id="username" placeholder="Enter your username" required>
+                        <input type="text" id="username" placeholder="Enter username" required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
                     <div class="input-wrapper">
-                        <span class="input-icon">🔒</span>
-                        <input type="password" id="password" placeholder="Enter your password" required>
+                        <input type="password" id="password" placeholder="Enter password" required>
                     </div>
                 </div>
-                <button id="login-btn" class="auth-button">
-                    <span class="button-text">Login</span>
-                    <span class="button-icon">♠</span>
-                </button>
-                <p class="form-footer">
-                    Don't have an account? <a href="#" id="show-signup">Sign up</a>
-                </p>
-            </div>
+                <button type="button" id="login-btn" class="auth-button">Login</button>
+                <div class="form-footer">
+                    <p>Don't have an account? <a href="#" id="show-signup">Sign up</a></p>
+                </div>
+            </form>
 
-            <div id="signup-form" class="auth-form hidden">
+            <!-- Signup Form -->
+            <form id="signup-form" class="auth-form hidden">
                 <div class="form-header">
-                    <h2>Join the Table</h2>
-                    <p class="subtitle">Create your account and start playing!</p>
+                    <h2>Create Account</h2>
+                    <p class="subtitle">Join the game</p>
                 </div>
                 <div class="form-group">
-                    <label for="new-username">Choose Username</label>
+                    <label for="new-username">Username</label>
                     <div class="input-wrapper">
-                        <span class="input-icon">👤</span>
-                        <input type="text" id="new-username" placeholder="Choose your username" required>
+                        <input type="text" id="new-username" placeholder="Choose username" required>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="new-password">Choose Password</label>
+                    <label for="new-password">Password</label>
                     <div class="input-wrapper">
-                        <span class="input-icon">🔒</span>
-                        <input type="password" id="new-password" placeholder="Choose your password" required>
+                        <input type="password" id="new-password" placeholder="Choose password" required>
                     </div>
                 </div>
-                <button id="signup-btn" class="auth-button">
-                    <span class="button-text">Sign Up</span>
-                    <span class="button-icon">♠</span>
-                </button>
-                <p class="form-footer">
-                    Already have an account? <a href="#" id="show-login">Login</a>
-                </p>
-            </div>
+                <button type="button" id="signup-btn" class="auth-button">Sign Up</button>
+                <div class="form-footer">
+                    <p>Already have an account? <a href="#" id="show-login">Login</a></p>
+                </div>
+            </form>
         </div>
     </div>
 
-    <div id="game-container" class="container hidden">
+    <!-- Game Container -->
+    <div id="game-container" class="hidden">
         <div class="game-header">
             <div class="player-info">
-                <span id="player-name"></span>
+                <span>Player: <span id="player-name"></span></span>
                 <div class="chips-display">
-                    Chips: <span id="chips-amount">1000</span>
+                    Chips: <span id="chips-count">1000</span>
                 </div>
+                <button id="logout-btn" class="btn-secondary">Logout</button>
             </div>
-            <button id="logout-btn">Logout</button>
         </div>
-        
+
         <div class="game-table">
+            <!-- Dealer Area -->
             <div class="dealer-section">
                 <div class="dealer-area">
-                    <h3>Dealer</h3>
+                    <h3>Dealer's Hand</h3>
+                    <div id="dealer-timer" class="dealer-timer">Next card in: <span id="timer-value">0</span>s</div>
                     <div id="dealer-cards" class="cards"></div>
                     <div id="dealer-score" class="score"></div>
                 </div>
             </div>
-            
+
+            <!-- Table Center -->
             <div class="table-center">
-                <div id="message" class="message-area"></div>
-                <div class="insurance-prompt hidden">
-                    <div class="insurance-message">Insurance?</div>
-                    <div class="insurance-controls">
-                        <button id="accept-insurance" class="insurance-button">Yes</button>
-                        <button id="decline-insurance" class="insurance-button">No</button>
-                    </div>
-                    <div class="insurance-info">
-                        Cost: <span id="insurance-cost">0</span> chips
-                    </div>
-                </div>
+                <div id="message-area" class="message-area"></div>
             </div>
-            
+
+            <!-- Players Area -->
             <div class="player-section">
                 <div class="player-area">
-                    <div id="player-cards" class="cards"></div>
-                    <div id="player-score" class="score"></div>
-                </div>
-                
-                <div class="controls-area">
-                    <div class="game-controls">
-                        <button id="hit-btn" disabled>Hit</button>
-                        <button id="stand-btn" disabled>Stand</button>
-                        <button id="deal-btn">Deal</button>
+                    <div id="players-area" class="multiplayer-area">
+                        <!-- Other players will be added here dynamically -->
                     </div>
-                    
+                    <div class="current-player-area">
+                        <h3>Your Hand</h3>
+                        <div id="player-cards" class="cards"></div>
+                        <div id="player-score" class="score"></div>
+                    </div>
+                </div>
+
+                <!-- Controls Area -->
+                <div class="controls-area">
                     <div class="bet-controls">
                         <div class="bet-input-group">
                             <input type="number" id="bet-amount" min="1" value="10">
-                            <button id="place-bet-btn">Place Bet</button>
+                            <button id="place-bet-btn" class="btn">Place Bet</button>
                         </div>
                     </div>
+                    <div class="game-controls">
+                        <button id="hit-btn" class="btn" disabled>Hit</button>
+                        <button id="stand-btn" class="btn" disabled>Stand</button>
+                        <button id="deal-btn" class="btn">Deal</button>
+                    </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Insurance Prompt -->
+        <div class="insurance-prompt hidden">
+            <h3>Insurance?</h3>
+            <p>Dealer shows an Ace. Would you like to take insurance?</p>
+            <p>Cost: <span id="insurance-cost">0</span> chips</p>
+            <div class="insurance-buttons">
+                <button id="accept-insurance" class="btn">Yes</button>
+                <button id="decline-insurance" class="btn">No</button>
             </div>
         </div>
     </div>

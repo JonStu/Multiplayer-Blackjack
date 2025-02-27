@@ -1,7 +1,11 @@
+/**
+ * Multiplayer Blackjack Game Client
+ */
 class BlackjackGame {
     constructor() {
         this.socket = io();
-        this.deck = this.createDeck();
+        this.username = localStorage.getItem('username');
+        this.tableId = 'table1';
         this.playerHand = [];
         this.dealerHand = [];
         this.gameState = 'betting'; // betting, playing, dealer, ended
@@ -11,352 +15,515 @@ class BlackjackGame {
         this.currentBet = 0;
         this.insuranceBet = 0;
         this.hasInsurance = false;
+        this.timerInterval = null;
+        this.timerValue = 0;
+        this.currentTurn = null;
+
+        // Card mappings for proper display
+        this.valueMap = {
+            'A': 'ace',
+            'K': 'king',
+            'Q': 'queen',
+            'J': 'jack',
+            '10': '10',
+            '9': '9',
+            '8': '8',
+            '7': '7',
+            '6': '6',
+            '5': '5',
+            '4': '4',
+            '3': '3',
+            '2': '2'
+        };
+
+        this.suitMap = {
+            '♠': 'spade',
+            '♥': 'heart',
+            '♣': 'club',
+            '♦': 'diamond'
+        };
 
         this.initializeElements();
         this.setupEventListeners();
         this.setupSocketListeners();
-    }
-
-    createDeck() {
-        const suits = ['♠', '♥', '♦', '♣'];
-        const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-        let deck = [];
-        
-        for (let suit of suits) {
-            for (let value of values) {
-                deck.push({ suit, value });
-            }
-        }
-        
-        return this.shuffleDeck(deck);
-    }
-
-    shuffleDeck(deck) {
-        for (let i = deck.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [deck[i], deck[j]] = [deck[j], deck[i]];
-        }
-        return deck;
+        this.joinGame();
     }
 
     initializeElements() {
-        this.dealerCards = document.getElementById('dealer-cards');
-        this.playerCards = document.getElementById('player-cards');
-        this.dealerScoreElement = document.getElementById('dealer-score');
-        this.playerScoreElement = document.getElementById('player-score');
-        this.messageElement = document.getElementById('message');
-        this.chipsElement = document.getElementById('chips-amount');
-        this.hitBtn = document.getElementById('hit-btn');
-        this.standBtn = document.getElementById('stand-btn');
-        this.dealBtn = document.getElementById('deal-btn');
-        this.betInput = document.getElementById('bet-amount');
-        this.placeBetBtn = document.getElementById('place-bet-btn');
-        this.insurancePrompt = document.querySelector('.insurance-prompt');
-        this.insuranceCost = document.getElementById('insurance-cost');
-        this.acceptInsurance = document.getElementById('accept-insurance');
-        this.declineInsurance = document.getElementById('decline-insurance');
+        this.elements = {
+            dealerCards: document.getElementById('dealer-cards'),
+            playerCards: document.getElementById('player-cards'),
+            dealerScore: document.getElementById('dealer-score'),
+            playerScore: document.getElementById('player-score'),
+            messageArea: document.getElementById('message-area'),
+            chipsDisplay: document.getElementById('chips-count'),
+            hitBtn: document.getElementById('hit-btn'),
+            standBtn: document.getElementById('stand-btn'),
+            dealBtn: document.getElementById('deal-btn'),
+            betInput: document.getElementById('bet-amount'),
+            placeBetBtn: document.getElementById('place-bet-btn'),
+            playersArea: document.querySelector('.other-players'),
+            insurancePrompt: document.querySelector('.insurance-prompt'),
+            insuranceCost: document.getElementById('insurance-cost'),
+            acceptInsurance: document.getElementById('accept-insurance'),
+            declineInsurance: document.getElementById('decline-insurance'),
+            timerValue: document.getElementById('timer-value'),
+            playerName: document.getElementById('player-name')
+        };
 
-        this.updateChipsDisplay();
+        // Set player name
+        this.elements.playerName.textContent = this.username;
     }
 
     setupEventListeners() {
-        this.hitBtn.addEventListener('click', () => this.hit());
-        this.standBtn.addEventListener('click', () => this.stand());
-        this.dealBtn.addEventListener('click', () => this.startNewGame());
-        this.placeBetBtn.addEventListener('click', () => this.placeBet());
-        this.acceptInsurance.addEventListener('click', () => this.takeInsurance());
-        this.declineInsurance.addEventListener('click', () => this.hideInsurancePrompt());
+        this.elements.hitBtn.addEventListener('click', () => this.hit());
+        this.elements.standBtn.addEventListener('click', () => this.stand());
+        this.elements.dealBtn.addEventListener('click', () => this.startNewGame());
+        this.elements.placeBetBtn.addEventListener('click', () => this.placeBet());
+        this.elements.acceptInsurance.addEventListener('click', () => this.takeInsurance());
+        this.elements.declineInsurance.addEventListener('click', () => this.hideInsurancePrompt());
+        
+        // Add bet input validation
+        this.elements.betInput.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            if (value > this.chips) {
+                e.target.value = this.chips;
+                this.showMessage('Maximum bet is ' + this.chips + ' chips', 'warning');
+            } else if (value < 1) {
+                e.target.value = 1;
+                this.showMessage('Minimum bet is 1 chip', 'warning');
+            }
+        });
     }
 
     setupSocketListeners() {
-        this.socket.on('gameState', (state) => this.updateGameState(state));
-        this.socket.on('message', (msg) => this.showMessage(msg));
+        this.socket.on('playerJoined', (data) => {
+            this.showMessage(`${data.joiner} joined the game`);
+            this.updateOtherPlayers(data.players);
+        });
+
+        this.socket.on('playerLeft', (data) => {
+            this.showMessage(`${data.username} left the game`);
+            this.updateOtherPlayers(data.players);
+        });
+
+        this.socket.on('gameStateUpdate', (data) => {
+            this.updateGameState(data);
+        });
     }
 
-    updateGameState(state) {
-        this.gameState = state.gameState;
-        this.playerHand = state.playerHand;
-        this.dealerHand = state.dealerHand;
-        this.updateDisplay();
+    joinGame() {
+        if (this.username) {
+            this.socket.emit('joinGame', {
+                username: this.username,
+                tableId: this.tableId
+            });
+        }
     }
 
-    async startNewGame() {
-        this.deck = this.createDeck();
+    updateOtherPlayers(players) {
+        const otherPlayersContainer = document.querySelector('.other-players');
+        otherPlayersContainer.innerHTML = '';
+
+        players.forEach(player => {
+            if (player.username === this.username) return;
+
+            const playerDiv = document.createElement('div');
+            playerDiv.className = 'other-player';
+            if (this.gameState === 'playing' && player.username === this.currentTurn) {
+                playerDiv.classList.add('current-turn');
+            }
+
+            playerDiv.innerHTML = `
+                <div class="player-name">${player.username}</div>
+                <div class="player-chips">Chips: ${player.chips}</div>
+                <div class="player-bet">Bet: ${player.bet || 0}</div>
+                <div class="player-status">${this.getPlayerStatusText(player)}</div>
+                <div class="player-cards">
+                    ${player.cards.map(card => this.createCardElement(card, true).outerHTML).join('')}
+                </div>
+            `;
+
+            otherPlayersContainer.appendChild(playerDiv);
+        });
+    }
+
+    getPlayerStatusText(player) {
+        switch(player.status) {
+            case 'betting': return 'Placing bet...';
+            case 'playing': return `Score: ${player.score}`;
+            case 'stand': return `Standing (${player.score})`;
+            case 'bust': return `Bust! (${player.score})`;
+            default: return 'Waiting...';
+        }
+    }
+
+    startNewGame() {
         this.clearTable();
         this.gameState = 'betting';
-        this.dealBtn.disabled = true;
-        this.hitBtn.disabled = true;
-        this.standBtn.disabled = true;
-        this.placeBetBtn.disabled = false;
-        this.betInput.disabled = false;
-        this.showMessage('Place your bet!');
+        this.dealerHand = [];
+        this.playerHand = [];
+        this.elements.dealBtn.disabled = true;
+        this.elements.hitBtn.disabled = true;
+        this.elements.standBtn.disabled = true;
+        this.elements.placeBetBtn.disabled = false;
+        this.elements.betInput.disabled = false;
+        this.showMessage('Place your bet to start the game!', 'info');
+
+        this.socket.emit('startNewGame', { 
+            tableId: this.tableId
+        });
     }
 
     async placeBet() {
-        const betAmount = parseInt(this.betInput.value);
+        const betAmount = parseInt(this.elements.betInput.value);
         if (betAmount > this.chips) {
-            this.showMessage('Not enough chips!');
+            this.showMessage('Not enough chips!', 'error');
             return;
         }
         if (betAmount < 1) {
-            this.showMessage('Minimum bet is 1 chip!');
+            this.showMessage('Minimum bet is 1 chip!', 'error');
             return;
         }
+
+        this.socket.emit('placeBet', { 
+            amount: betAmount,
+            tableId: this.tableId
+        });
 
         this.currentBet = betAmount;
         this.chips -= betAmount;
         this.updateChipsDisplay();
-        
-        this.gameState = 'playing';
-        this.placeBetBtn.disabled = true;
-        this.betInput.disabled = true;
-        this.hitBtn.disabled = false;
-        this.standBtn.disabled = false;
-        
-        await this.dealInitialCards();
+        this.elements.placeBetBtn.disabled = true;
+        this.elements.betInput.disabled = true;
+        this.showMessage('Bet placed! Waiting for other players...', 'success');
     }
 
-    async dealInitialCards() {
-        this.playerHand = [this.deck.pop(), this.deck.pop()];
-        this.dealerHand = [this.deck.pop(), this.deck.pop()];
-        
-        // Deal cards with animation
-        await this.renderCard(this.playerCards, this.playerHand[0], true);
-        await this.renderCard(this.dealerCards, this.dealerHand[0], true);
-        await this.renderCard(this.playerCards, this.playerHand[1], true);
-        await this.renderCard(this.dealerCards, this.dealerHand[1], false);
+    async hit() {
+        this.socket.emit('playerAction', { 
+            action: 'hit',
+            tableId: this.tableId
+        });
+        this.showMessage('Hit! Drawing a card...', 'info');
+    }
 
-        this.calculateScores();
-        this.checkForBlackjack();
-        this.offerInsurance();
+    async stand() {
+        this.socket.emit('playerAction', { 
+            action: 'stand',
+            tableId: this.tableId
+        });
+        this.showMessage('Stand! Waiting for other players...', 'info');
+    }
+
+    startTimer(duration) {
+        this.stopTimer();
+        this.timerValue = duration;
+        this.elements.timerValue.textContent = this.timerValue;
+        
+        this.timerInterval = setInterval(() => {
+            this.timerValue--;
+            this.elements.timerValue.textContent = this.timerValue;
+            
+            if (this.timerValue <= 0) {
+                this.stopTimer();
+            }
+        }, 1000);
+    }
+
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+    }
+
+    updateGameState(state) {
+        // Update dealer's cards
+        if (state.dealer) {
+            this.dealerHand = state.dealer.cards;
+            this.dealerScore = state.dealer.score;
+            this.renderDealerCards(state.state === 'dealer' || state.state === 'roundEnd');
+
+            // Start timer for dealer's next card
+            if (state.state === 'dealer' && state.nextCardTimer) {
+                this.startTimer(state.nextCardTimer);
+                this.showMessage("Dealer's turn! Drawing next card...", 'info');
+            } else {
+                this.stopTimer();
+            }
+        }
+
+        // Update player's cards
+        const player = state.players.find(p => p.username === this.username);
+        if (player) {
+            this.playerHand = player.cards;
+            this.playerScore = player.score;
+            this.chips = player.chips;
+            this.renderPlayerCards();
+            this.updateChipsDisplay();
+
+            // If we just placed a bet and others have bet, start countdown
+            if (state.state === 'betting' && player.bet > 0) {
+                const otherPlayersWithBets = state.players.filter(p => 
+                    p.username !== this.username && p.bet > 0
+                ).length;
+                
+                if (otherPlayersWithBets > 0) {
+                    this.startBettingCountdown();
+                }
+            }
+
+            // Show appropriate message based on player status
+            if (player.status === 'bust') {
+                this.showMessage('Bust! Your score is over 21', 'error');
+            } else if (player.status === 'stand') {
+                this.showMessage('Standing with ' + player.score, 'info');
+            }
+        }
+
+        // Update controls based on state
+        switch (state.state) {
+            case 'betting':
+                this.elements.dealBtn.disabled = true;
+                this.elements.hitBtn.disabled = true;
+                this.elements.standBtn.disabled = true;
+                // Only enable betting if we're in a fresh betting round (no cards dealt)
+                const canBet = !this.dealerHand.length && !this.playerHand.length;
+                this.elements.placeBetBtn.disabled = !canBet;
+                this.elements.betInput.disabled = !canBet;
+                if (canBet && !player?.bet) {
+                    this.showMessage('Place your bet to start the game!', 'info');
+                } else if (!canBet) {
+                    this.showMessage('Waiting for all bets to be placed...', 'info');
+                }
+                break;
+            case 'playing':
+                const isPlayerTurn = state.currentTurn === this.username;
+                this.elements.hitBtn.disabled = !isPlayerTurn;
+                this.elements.standBtn.disabled = !isPlayerTurn;
+                this.elements.dealBtn.disabled = true;
+                this.elements.placeBetBtn.disabled = true;
+                this.elements.betInput.disabled = true;
+                if (isPlayerTurn) {
+                    this.showMessage('Your turn! Hit or Stand?', 'info');
+                } else {
+                    const currentPlayer = state.players.find(p => p.username === state.currentTurn);
+                    if (currentPlayer) {
+                        this.showMessage(`Waiting for ${currentPlayer.username}'s turn...`, 'info');
+                    }
+                }
+                break;
+            case 'dealer':
+                this.elements.hitBtn.disabled = true;
+                this.elements.standBtn.disabled = true;
+                this.elements.dealBtn.disabled = true;
+                this.elements.placeBetBtn.disabled = true;
+                this.elements.betInput.disabled = true;
+                break;
+            case 'roundEnd':
+                this.elements.hitBtn.disabled = true;
+                this.elements.standBtn.disabled = true;
+                this.elements.dealBtn.disabled = false;
+                // Disable betting until new round starts
+                this.elements.placeBetBtn.disabled = true;
+                this.elements.betInput.disabled = true;
+                this.showRoundEndMessage(state, player);
+                break;
+        }
+
+        // Update other players
+        this.updateOtherPlayers(state);
+
+        // Check for insurance opportunity
+        if (state.dealer?.cards[0]?.value === 'A' && !this.hasInsurance) {
+            this.offerInsurance();
+        }
+    }
+
+    showRoundEndMessage(state, player) {
+        if (!player) return;
+        
+        const dealerScore = state.dealer.score;
+        const playerScore = player.score;
+        let result = '';
+        
+        if (player.status === 'bust') {
+            result = 'Game Over - Bust! You lost this round.';
+            this.showMessage(result, 'error');
+        } else if (dealerScore > 21) {
+            result = 'You Win! Dealer bust with ' + dealerScore;
+            this.showMessage(result, 'success');
+        } else if (playerScore > dealerScore) {
+            result = 'You Win! ' + playerScore + ' beats dealer\'s ' + dealerScore;
+            this.showMessage(result, 'success');
+        } else if (playerScore === dealerScore) {
+            result = 'Push! Tied with dealer at ' + playerScore;
+            this.showMessage(result, 'info');
+        } else {
+            result = 'Dealer Wins with ' + dealerScore + ' vs your ' + playerScore;
+            this.showMessage(result, 'error');
+        }
+        
+        this.showMessage('Place your bet to join the next round', 'info', true);
+    }
+
+    startBettingCountdown() {
+        let countdown = 10;
+        this.showMessage(`Game starting in ${countdown} seconds...`, 'info', true);
+        
+        const countdownInterval = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+                this.showMessage(`Game starting in ${countdown} seconds...`, 'info', true);
+            } else {
+                clearInterval(countdownInterval);
+                this.socket.emit('startGame', { tableId: this.tableId });
+            }
+        }, 1000);
+    }
+
+    renderDealerCards(showAll = false) {
+        this.elements.dealerCards.innerHTML = '';
+        this.dealerHand.forEach((card, index) => {
+            // Only show first card unless showAll is true or it's the first card
+            const faceUp = showAll || index === 0;
+            const cardElement = this.createCardElement(card, faceUp);
+            this.elements.dealerCards.appendChild(cardElement);
+        });
+
+        if (showAll && this.dealerScore > 0) {
+            this.elements.dealerScore.textContent = `Dealer Score: ${this.dealerScore}`;
+        } else {
+            this.elements.dealerScore.textContent = '';
+        }
+    }
+
+    renderPlayerCards() {
+        this.elements.playerCards.innerHTML = '';
+        this.playerHand.forEach(card => {
+            this.elements.playerCards.appendChild(this.createCardElement(card, true));
+        });
+        this.elements.playerScore.textContent = `Score: ${this.playerScore}`;
+    }
+
+    createCardElement(card, faceUp) {
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'card dealt';
+        
+        if (faceUp) {
+            const suit = card.suit;
+            cardDiv.classList.add(this.getSuitClass(suit));
+            
+            // Create top-left corner
+            const topLeft = document.createElement('div');
+            topLeft.className = 'card-corner top-left';
+            topLeft.innerHTML = `
+                <span class="card-value">${card.value}</span>
+                <span class="card-suit">${suit}</span>
+            `;
+            
+            // Create center suit
+            const center = document.createElement('div');
+            center.className = 'card-center';
+            center.textContent = suit;
+            
+            // Create bottom-right corner (rotated 180deg)
+            const bottomRight = document.createElement('div');
+            bottomRight.className = 'card-corner bottom-right';
+            bottomRight.innerHTML = `
+                <span class="card-value">${card.value}</span>
+                <span class="card-suit">${suit}</span>
+            `;
+            
+            cardDiv.appendChild(topLeft);
+            cardDiv.appendChild(center);
+            cardDiv.appendChild(bottomRight);
+        } else {
+            cardDiv.classList.add('card-back');
+        }
+        
+        return cardDiv;
+    }
+
+    getSuitClass(suit) {
+        switch(suit) {
+            case '♥': return 'hearts';
+            case '♦': return 'diamonds';
+            case '♠': return 'spades';
+            case '♣': return 'clubs';
+            default: return '';
+        }
+    }
+
+    updateControls(state) {
+        const isPlayerTurn = state.currentTurn === this.username;
+        this.elements.hitBtn.disabled = !isPlayerTurn;
+        this.elements.standBtn.disabled = !isPlayerTurn;
+        this.elements.dealBtn.disabled = state.state !== 'roundEnd';
     }
 
     offerInsurance() {
-        const dealerCards = document.querySelectorAll('.dealer-cards .card');
-        const dealerFirstCard = dealerCards[0];
-        
-        // Only offer insurance if dealer's face-up card is an Ace
-        if (dealerFirstCard && dealerFirstCard.dataset.value === 'A') {
-            this.insuranceBet = Math.floor(this.currentBet / 2);
-            this.insuranceCost.textContent = this.insuranceBet;
-            this.insurancePrompt.classList.remove('hidden');
-        }
+        this.insuranceBet = Math.floor(this.currentBet / 2);
+        this.elements.insuranceCost.textContent = this.insuranceBet;
+        this.elements.insurancePrompt.classList.remove('hidden');
     }
 
     takeInsurance() {
         if (this.chips >= this.insuranceBet) {
+            this.socket.emit('takeInsurance', {
+                amount: this.insuranceBet,
+                tableId: this.tableId
+            });
             this.hasInsurance = true;
             this.chips -= this.insuranceBet;
             this.updateChipsDisplay();
-            
-            // Update message to show insurance taken
-            this.messageElement.textContent = 'Insurance taken';
             this.hideInsurancePrompt();
         } else {
-            this.messageElement.textContent = 'Not enough chips for insurance';
+            this.showMessage('Not enough chips for insurance');
             this.hideInsurancePrompt();
         }
     }
 
     hideInsurancePrompt() {
-        this.insurancePrompt.classList.add('hidden');
-    }
-
-    handleInsuranceOutcome() {
-        if (!this.hasInsurance) return;
-        
-        const dealerHasBlackjack = this.calculateHandScore(this.dealerHand) === 21 && this.dealerHand.length === 2;
-        
-        if (dealerHasBlackjack) {
-            // Insurance pays 2:1
-            const insuranceWinnings = this.insuranceBet * 2;
-            this.chips += insuranceWinnings + this.insuranceBet;
-            this.messageElement.textContent = `Insurance bet won! +${insuranceWinnings} chips`;
-        } else {
-            this.messageElement.textContent = 'Insurance bet lost';
-        }
-        
-        this.updateChipsDisplay();
-        this.hasInsurance = false;
-        this.insuranceBet = 0;
-    }
-
-    createCardElement(card, faceUp) {
-        const cardElement = document.createElement('div');
-        cardElement.className = 'card dealt';
-        
-        if (faceUp) {
-            cardElement.classList.add(card.suit === '♥' || card.suit === '♦' ? 'red' : 'black');
-            cardElement.setAttribute('data-value', `${card.value}${card.suit}`);
-            cardElement.textContent = `${card.value}${card.suit}`;
-        } else {
-            cardElement.style.background = '#2d2d2d';
-            cardElement.textContent = '🂠';
-        }
-        
-        return cardElement;
-    }
-
-    async renderCard(container, card, faceUp) {
-        const cardElement = this.createCardElement(card, faceUp);
-        container.appendChild(cardElement);
-
-        return new Promise(resolve => {
-            setTimeout(resolve, 500);
-        });
-    }
-
-    async hit() {
-        if (this.gameState !== 'playing') return;
-        
-        const card = this.deck.pop();
-        this.playerHand.push(card);
-        await this.renderCard(this.playerCards, card, true);
-        
-        this.calculateScores();
-        if (this.playerScore > 21) {
-            this.endGame('bust');
-        }
-    }
-
-    async stand() {
-        if (this.gameState !== 'playing') return;
-        this.gameState = 'dealer';
-        this.hitBtn.disabled = true;
-        this.standBtn.disabled = true;
-
-        // Reveal dealer's hole card
-        this.dealerCards.innerHTML = '';
-        for (let card of this.dealerHand) {
-            await this.renderCard(this.dealerCards, card, true);
-        }
-
-        // Dealer hits on 16, stands on 17
-        while (this.dealerScore < 17) {
-            const card = this.deck.pop();
-            this.dealerHand.push(card);
-            await this.renderCard(this.dealerCards, card, true);
-            this.calculateScores();
-        }
-
-        this.determineWinner();
-    }
-
-    calculateScores() {
-        this.playerScore = this.calculateHandScore(this.playerHand);
-        this.dealerScore = this.calculateHandScore(this.dealerHand);
-
-        this.playerScoreElement.textContent = `Score: ${this.playerScore}`;
-        // Only show dealer's score when all cards are visible
-        if (this.gameState === 'dealer' || this.gameState === 'ended') {
-            this.dealerScoreElement.textContent = `Score: ${this.dealerScore}`;
-        } else {
-            // Calculate score of only the visible card
-            const visibleCardScore = this.calculateHandScore([this.dealerHand[0]]);
-            this.dealerScoreElement.textContent = `Score: ${visibleCardScore}`;
-        }
-    }
-
-    calculateHandScore(hand) {
-        let score = 0;
-        let aces = 0;
-
-        for (let card of hand) {
-            if (card.value === 'A') {
-                aces++;
-                score += 11;
-            } else if (['K', 'Q', 'J'].includes(card.value)) {
-                score += 10;
-            } else {
-                score += parseInt(card.value) || 0;
-            }
-        }
-
-        while (score > 21 && aces > 0) {
-            score -= 10;
-            aces--;
-        }
-
-        return score;
-    }
-
-    checkForBlackjack() {
-        if (this.playerScore === 21) {
-            this.endGame('blackjack');
-        }
-    }
-
-    determineWinner() {
-        if (this.dealerScore > 21) {
-            this.endGame('dealer_bust');
-        } else if (this.dealerScore > this.playerScore) {
-            this.endGame('dealer_wins');
-        } else if (this.dealerScore < this.playerScore) {
-            this.endGame('player_wins');
-        } else {
-            this.endGame('push');
-        }
-    }
-
-    endGame(result) {
-        this.gameState = 'ended';
-        this.hitBtn.disabled = true;
-        this.standBtn.disabled = true;
-        this.dealBtn.disabled = false;
-
-        this.handleInsuranceOutcome();
-
-        switch (result) {
-            case 'blackjack':
-                this.chips += Math.floor(this.currentBet * 2.5);
-                this.showMessage('Blackjack! You win!');
-                break;
-            case 'bust':
-                this.showMessage('Bust! You lose!');
-                break;
-            case 'dealer_bust':
-                this.chips += this.currentBet * 2;
-                this.showMessage('Dealer busts! You win!');
-                break;
-            case 'dealer_wins':
-                this.showMessage('Dealer wins!');
-                break;
-            case 'player_wins':
-                this.chips += this.currentBet * 2;
-                this.showMessage('You win!');
-                break;
-            case 'push':
-                this.chips += this.currentBet;
-                this.showMessage('Push! Bet returned.');
-                break;
-        }
-
-        this.updateChipsDisplay();
-        this.currentBet = 0;
+        this.elements.insurancePrompt.classList.add('hidden');
     }
 
     clearTable() {
-        this.dealerCards.innerHTML = '';
-        this.playerCards.innerHTML = '';
-        this.playerScore = 0;
-        this.dealerScore = 0;
-        this.playerScoreElement.textContent = '';
-        this.dealerScoreElement.textContent = '';
-        this.messageElement.textContent = '';
-        this.playerHand = [];
+        this.elements.dealerCards.innerHTML = '';
+        this.elements.playerCards.innerHTML = '';
+        this.elements.dealerScore.textContent = '';
+        this.elements.playerScore.textContent = '';
         this.dealerHand = [];
+        this.playerHand = [];
     }
 
-    showMessage(message) {
-        this.messageElement.textContent = message;
+    showMessage(message, type = 'info', append = false) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        messageDiv.textContent = message;
+        
+        if (append) {
+            this.elements.messageArea.appendChild(messageDiv);
+        } else {
+            this.elements.messageArea.innerHTML = '';
+            this.elements.messageArea.appendChild(messageDiv);
+        }
     }
 
     updateChipsDisplay() {
-        this.chipsElement.textContent = this.chips;
+        this.elements.chipsDisplay.textContent = this.chips;
+    }
+
+    createCardHTML(card) {
+        const isRed = ['♥', '♦'].includes(card.suit);
+        return `
+            <div class="card ${isRed ? 'red' : 'black'}">
+                <div class="card-value">${card.value}</div>
+                <div class="card-suit">${card.suit}</div>
+            </div>
+        `;
     }
 }
 
-// Initialize the game when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    const game = new BlackjackGame();
-});
+// Initialize game when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => new BlackjackGame());
