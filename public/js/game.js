@@ -916,8 +916,6 @@ class BlackjackGame {
     }
 
     resetForNewRound() {
-        // Reset game state
-        this.gameState = 'betting';
         this.playerHand = [];
         this.dealerHand = [];
         
@@ -930,7 +928,7 @@ class BlackjackGame {
         this.elements.hitBtn.disabled = true;
         this.elements.standBtn.disabled = true;
         this.elements.doubleDownBtn.disabled = true;
-        this.elements.betBtn.disabled = false;
+        this.elements.placeBetBtn.disabled = false;  // Changed from betBtn to placeBetBtn
         this.elements.betInput.disabled = false;
         
         // Update display

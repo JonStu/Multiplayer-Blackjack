@@ -870,7 +870,7 @@ class BlackjackTable {
         const dealerHasBlackjack = this.hasBlackjack(this.dealer.cards);
         
         for (const player of this.players) {
-            if (!player.hand || player.hand.length === 0) return;
+            if (!player.cards || player.cards.length === 0) continue;
             
             const playerScore = this.calculateScore(player.cards);
             const playerHasBlackjack = this.hasBlackjack(player.cards);
@@ -878,24 +878,24 @@ class BlackjackTable {
             
             // Determine outcome
             if (playerScore > 21) {
-                player.chips -= player.currentBet;
-                message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.currentBet} chips.`;
+                player.chips -= player.bet;
+                message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.bet} chips.`;
             } else if (dealerScore > 21) {
-                player.chips += player.currentBet;
-                message = `🎉 ${player.username} wins with ${playerScore}! Dealer busted at ${dealerScore}. Won ${player.currentBet} chips.`;
+                player.chips += player.bet;
+                message = `🎉 ${player.username} wins with ${playerScore}! Dealer busted at ${dealerScore}. Won ${player.bet} chips.`;
             } else if (playerHasBlackjack && !dealerHasBlackjack) {
-                const blackjackPayout = Math.floor(player.currentBet * 1.5);
+                const blackjackPayout = Math.floor(player.bet * 1.5);
                 player.chips += blackjackPayout;
                 message = `🎰 Blackjack! ${player.username} wins ${blackjackPayout} chips.`;
             } else if (!playerHasBlackjack && dealerHasBlackjack) {
-                player.chips -= player.currentBet;
-                message = `❌ Dealer Blackjack! ${player.username} loses ${player.currentBet} chips.`;
+                player.chips -= player.bet;
+                message = `❌ Dealer Blackjack! ${player.username} loses ${player.bet} chips.`;
             } else if (playerScore > dealerScore) {
-                player.chips += player.currentBet;
-                message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}! Won ${player.currentBet} chips.`;
+                player.chips += player.bet;
+                message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}! Won ${player.bet} chips.`;
             } else if (playerScore < dealerScore) {
-                player.chips -= player.currentBet;
-                message = `❌ ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}. Lost ${player.currentBet} chips.`;
+                player.chips -= player.bet;
+                message = `❌ ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}. Lost ${player.bet} chips.`;
             } else {
                 message = `🤝 Push! ${player.username} ties with ${playerScore}.`;
             }
@@ -918,7 +918,7 @@ class BlackjackTable {
             });
             
             // Reset bets
-            player.currentBet = 0;
+            player.bet = 0;
             player.insuranceBet = 0;
             
             // Update player's chips
@@ -939,7 +939,7 @@ class BlackjackTable {
         // Reset all players
         this.players.forEach(player => {
             player.cards = [];
-            player.currentBet = 0;
+            player.bet = 0;
             player.insuranceBet = 0;
         });
 
@@ -970,29 +970,29 @@ class BlackjackTable {
             
             // Determine outcome
             if (playerScore > 21) {
-                player.chips -= player.currentBet;
-                message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.currentBet} chips`;
+                player.chips -= player.bet;
+                message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.bet} chips`;
                 type = 'error';
             } else if (dealerScore > 21) {
-                player.chips += player.currentBet;
-                message = `🎉 ${player.username} wins ${player.currentBet} chips! (${playerScore} vs Dealer bust)`;
+                player.chips += player.bet;
+                message = `🎉 ${player.username} wins ${player.bet} chips! (${playerScore} vs Dealer bust)`;
                 type = 'success';
             } else if (playerHasBlackjack && !dealerHasBlackjack) {
-                const blackjackPayout = Math.floor(player.currentBet * 1.5);
+                const blackjackPayout = Math.floor(player.bet * 1.5);
                 player.chips += blackjackPayout;
                 message = `🎰 Blackjack! ${player.username} wins ${blackjackPayout} chips!`;
                 type = 'success';
             } else if (!playerHasBlackjack && dealerHasBlackjack) {
-                player.chips -= player.currentBet;
-                message = `❌ Dealer Blackjack! ${player.username} loses ${player.currentBet} chips`;
+                player.chips -= player.bet;
+                message = `❌ Dealer Blackjack! ${player.username} loses ${player.bet} chips`;
                 type = 'error';
             } else if (playerScore > dealerScore) {
-                player.chips += player.currentBet;
-                message = `🎉 ${player.username} wins ${player.currentBet} chips! (${playerScore} vs ${dealerScore})`;
+                player.chips += player.bet;
+                message = `🎉 ${player.username} wins ${player.bet} chips! (${playerScore} vs ${dealerScore})`;
                 type = 'success';
             } else if (playerScore < dealerScore) {
-                player.chips -= player.currentBet;
-                message = `❌ ${player.username} loses ${player.currentBet} chips (${playerScore} vs ${dealerScore})`;
+                player.chips -= player.bet;
+                message = `❌ ${player.username} loses ${player.bet} chips (${playerScore} vs ${dealerScore})`;
                 type = 'error';
             } else {
                 message = `🤝 Push! ${player.username} ties with ${playerScore}`;
