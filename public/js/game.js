@@ -2,10 +2,10 @@
  * Multiplayer Blackjack Game Client
  */
 class BlackjackGame {
-    constructor() {
+    constructor(username, tableId) {
+        this.username = username;
+        this.tableId = tableId;
         this.socket = io();
-        this.username = localStorage.getItem('username');
-        this.tableId = 'table1';
         this.playerHand = [];
         this.dealerHand = [];
         this.gameState = 'betting'; // betting, playing, dealer, ended
@@ -18,6 +18,17 @@ class BlackjackGame {
         this.timerInterval = null;
         this.timerValue = 0;
         this.currentTurn = null;
+        this.showOtherPlayersCards = false; // Add new property
+        this.lastPlayersUpdate = null; // Store last update
+
+        // Connection monitoring
+        this.lastPong = Date.now();
+        this.connectionMonitoring = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+
+        // Start connection monitoring
+        this.startConnectionMonitoring();
 
         // Card mappings for proper display
         this.valueMap = {
@@ -47,6 +58,7 @@ class BlackjackGame {
         this.setupEventListeners();
         this.setupSocketListeners();
         this.joinGame();
+        this.addDealerStyles();
     }
 
     initializeElements() {
@@ -62,7 +74,7 @@ class BlackjackGame {
             dealBtn: document.getElementById('deal-btn'),
             betInput: document.getElementById('bet-amount'),
             placeBetBtn: document.getElementById('place-bet-btn'),
-            playersArea: document.querySelector('.other-players'),
+            playersArea: document.getElementById('players-area'),
             insurancePrompt: document.querySelector('.insurance-prompt'),
             insuranceCost: document.getElementById('insurance-cost'),
             acceptInsurance: document.getElementById('accept-insurance'),
@@ -72,11 +84,25 @@ class BlackjackGame {
             chatMessages: document.getElementById('chat-messages'),
             chatInput: document.getElementById('chat-input'),
             chatSend: document.getElementById('chat-send'),
-            lobbyList: document.getElementById('lobby-list')
+            toggleCardsBtn: document.getElementById('toggle-cards-btn')
         };
 
         // Set player name
-        this.elements.playerName.textContent = this.username;
+        if (this.elements.playerName) {
+            this.elements.playerName.textContent = this.username;
+        }
+
+        // Update chips display
+        if (this.elements.chipsDisplay) {
+            this.elements.chipsDisplay.textContent = this.chips;
+        }
+
+        // Log any missing elements
+        Object.entries(this.elements).forEach(([key, element]) => {
+            if (!element) {
+                console.warn(`[Client] Missing UI element: ${key}`);
+            }
+        });
     }
 
     setupEventListeners() {
@@ -106,25 +132,67 @@ class BlackjackGame {
                 this.showMessage('Minimum bet is 1 chip', 'warning');
             }
         });
+
+        // Add toggle cards button listener
+        this.elements.toggleCardsBtn.addEventListener('click', () => {
+            this.showOtherPlayersCards = !this.showOtherPlayersCards;
+            this.elements.toggleCardsBtn.textContent = this.showOtherPlayersCards ? 'Hide Other Cards' : 'Show Other Cards';
+            this.updateOtherPlayers(this.lastPlayersUpdate || []);
+        });
     }
 
     setupSocketListeners() {
+        this.socket.on('connect', () => {
+            console.log('[Client] Connected to server');
+            this.joinGame();
+        });
+
+        this.socket.on('gameStateUpdate', (data) => {
+            console.log('[Client] Game state update:', data);
+            this.updateGameState(data);
+        });
+
         this.socket.on('playerJoined', (data) => {
+            console.log('[Client] Player joined:', data);
             this.showMessage(`${data.joiner} joined the game`);
             this.updateOtherPlayers(data.players);
         });
 
         this.socket.on('playerLeft', (data) => {
+            console.log('[Client] Player left:', data);
             this.showMessage(`${data.username} left the game`);
             this.updateOtherPlayers(data.players);
         });
 
-        this.socket.on('gameStateUpdate', (data) => {
-            this.updateGameState(data);
+        this.socket.on('dealerTurn', (data) => {
+            console.log('[Client] Dealer turn:', data);
+            this.handleDealerTurn(data);
         });
 
-        this.socket.on('chatMessage', (data) => {
-            this.addChatMessage(data.username, data.message, 'user');
+        this.socket.on('dealerCard', (data) => {
+            console.log('[Client] Dealer card:', data);
+            this.handleDealerCard(data);
+        });
+
+        this.socket.on('dealerStand', (data) => {
+            console.log('[Client] Dealer stand:', data);
+            this.handleDealerStand(data);
+        });
+
+        this.socket.on('roundEnd', (data) => {
+            console.log('[Client] Round end:', data);
+            this.handleRoundEnd(data);
+        });
+
+        // Add ping/pong for connection monitoring
+        this.socket.on('pong', () => {
+            this.lastPong = Date.now();
+            this.reconnectAttempts = 0;
+        });
+
+        this.socket.on('disconnect', () => {
+            console.log('[Client] Disconnected from server');
+            this.handleConnectionLoss();
         });
     }
 
@@ -138,7 +206,8 @@ class BlackjackGame {
     }
 
     updateOtherPlayers(players) {
-        const otherPlayersContainer = document.querySelector('.other-players');
+        this.lastPlayersUpdate = players;
+        const otherPlayersContainer = this.elements.playersArea;
         otherPlayersContainer.innerHTML = '';
 
         players.forEach(player => {
@@ -150,13 +219,15 @@ class BlackjackGame {
                 playerDiv.classList.add('current-turn');
             }
 
+            const showCards = this.showOtherPlayersCards || this.gameState === 'ended';
+            
             playerDiv.innerHTML = `
                 <div class="player-name">${player.username}</div>
                 <div class="player-chips">Chips: ${player.chips}</div>
                 <div class="player-bet">Bet: ${player.bet || 0}</div>
                 <div class="player-status">${this.getPlayerStatusText(player)}</div>
                 <div class="player-cards">
-                    ${player.cards.map(card => this.createCardElement(card, true).outerHTML).join('')}
+                    ${player.cards.map(card => this.createCardElement(card, showCards).outerHTML).join('')}
                 </div>
             `;
 
@@ -228,6 +299,8 @@ class BlackjackGame {
             action: 'stand',
             tableId: this.tableId
         });
+        this.elements.hitBtn.disabled = true;
+        this.elements.standBtn.disabled = true;
         this.showMessage('Stand! Waiting for other players...', 'info');
     }
 
@@ -253,285 +326,263 @@ class BlackjackGame {
         }
     }
 
-    updateGameState(state) {
-        this.updateLobby(state);
-        // Update dealer's cards
-        if (state.dealer) {
-            this.dealerHand = state.dealer.cards;
-            this.dealerScore = state.dealer.score;
-            this.renderDealerCards(state.state === 'dealer' || state.state === 'roundEnd');
-
-            // Start timer for dealer's next card
-            if (state.state === 'dealer' && state.nextCardTimer) {
-                this.startTimer(state.nextCardTimer);
-                this.showMessage("Dealer's turn! Drawing next card...", 'info');
-            } else {
-                this.stopTimer();
+    updateGameState(data) {
+        this.gameState = data.state;
+        
+        // Update player's hand if it exists in the data
+        if (data.players) {
+            const playerData = data.players.find(p => p.username === this.username);
+            if (playerData) {
+                this.playerHand = playerData.cards || [];
+                this.playerScore = playerData.score || 0;
+                this.chips = playerData.chips || this.chips;
             }
         }
 
-        // Update player's cards
-        const player = state.players.find(p => p.username === this.username);
-        if (player) {
-            this.playerHand = player.cards;
-            this.playerScore = player.score;
-            this.chips = player.chips;
-            this.renderPlayerCards();
-            this.updateChipsDisplay();
-
-            // If we just placed a bet and others have bet, start countdown
-            if (state.state === 'betting' && player.bet > 0) {
-                const otherPlayersWithBets = state.players.filter(p => 
-                    p.username !== this.username && p.bet > 0
-                ).length;
-                
-                if (otherPlayersWithBets > 0) {
-                    this.startBettingCountdown();
-                }
-            }
-
-            // Show appropriate message based on player status
-            if (player.status === 'bust') {
-                this.showMessage('Bust! Your score is over 21', 'error');
-            } else if (player.status === 'stand') {
-                this.showMessage('Standing with ' + player.score, 'info');
-            }
+        // Update dealer's hand if it exists in the data
+        if (data.dealer) {
+            this.dealerHand = data.dealer.cards || [];
+            this.dealerScore = data.dealer.score || 0;
         }
 
-        // Update controls based on state
-        switch (state.state) {
+        this.currentTurn = data.currentTurn;
+
+        // Update UI based on game state
+        this.renderPlayerCards();
+        this.renderDealerCards(data.state === 'dealer' || data.state === 'ended');
+        this.updateControls(data);
+        this.updateChipsDisplay();
+        
+        if (data.players) {
+            this.updateOtherPlayers(data.players);
+        }
+
+        // Handle game state specific logic
+        switch(data.state) {
             case 'betting':
-                this.elements.dealBtn.disabled = true;
+                this.elements.placeBetBtn.disabled = false;
+                this.elements.betInput.disabled = false;
                 this.elements.hitBtn.disabled = true;
                 this.elements.standBtn.disabled = true;
-                // Only enable betting if we're in a fresh betting round (no cards dealt)
-                const canBet = !this.dealerHand.length && !this.playerHand.length;
-                this.elements.placeBetBtn.disabled = !canBet;
-                this.elements.betInput.disabled = !canBet;
-                if (canBet && !player?.bet) {
-                    this.showMessage('Place your bet to start the game!', 'info');
-                } else if (!canBet) {
-                    this.showMessage('Waiting for all bets to be placed...', 'info');
-                }
-                break;
-            case 'playing':
-                const isPlayerTurn = state.currentTurn === this.username;
-                this.elements.hitBtn.disabled = !isPlayerTurn;
-                this.elements.standBtn.disabled = !isPlayerTurn;
                 this.elements.dealBtn.disabled = true;
+                this.showMessage('Place your bet to start the game!', 'info');
+                break;
+                
+            case 'playing':
                 this.elements.placeBetBtn.disabled = true;
                 this.elements.betInput.disabled = true;
-                if (isPlayerTurn) {
+                this.elements.dealBtn.disabled = true;
+                if (this.currentTurn === this.username) {
+                    this.elements.hitBtn.disabled = false;
+                    this.elements.standBtn.disabled = false;
                     this.showMessage('Your turn! Hit or Stand?', 'info');
                 } else {
-                    const currentPlayer = state.players.find(p => p.username === state.currentTurn);
-                    if (currentPlayer) {
-                        this.showMessage(`Waiting for ${currentPlayer.username}'s turn...`, 'info');
-                    }
+                    this.elements.hitBtn.disabled = true;
+                    this.elements.standBtn.disabled = true;
+                    this.showMessage(`Waiting for ${this.currentTurn}'s turn`, 'info');
                 }
                 break;
+                
             case 'dealer':
                 this.elements.hitBtn.disabled = true;
                 this.elements.standBtn.disabled = true;
                 this.elements.dealBtn.disabled = true;
                 this.elements.placeBetBtn.disabled = true;
                 this.elements.betInput.disabled = true;
+                this.showMessage("Dealer's turn", 'info');
+
+                // Request dealer action if all players are done
+                const allPlayersDone = data.players.every(p => 
+                    p.status === 'stand' || p.status === 'bust'
+                );
+                if (allPlayersDone) {
+                    this.socket.emit('requestDealerTurn', { tableId: this.tableId });
+                }
                 break;
-            case 'roundEnd':
+                
+            case 'ended':
+                this.elements.dealBtn.disabled = false;
                 this.elements.hitBtn.disabled = true;
                 this.elements.standBtn.disabled = true;
-                this.elements.dealBtn.disabled = false;
-                // Disable betting until new round starts
                 this.elements.placeBetBtn.disabled = true;
                 this.elements.betInput.disabled = true;
-                this.showRoundEndMessage(state, player);
+                
+                // Show all cards
+                this.renderDealerCards(true);
+                
+                if (data.winners) {
+                    this.showRoundEndMessage(data);
+                }
                 break;
         }
 
-        // Update other players
-        this.updateOtherPlayers(state);
-
-        // Check for insurance opportunity
-        if (state.dealer?.cards[0]?.value === 'A' && !this.hasInsurance) {
-            this.offerInsurance();
+        // Check for insurance if dealer shows an Ace
+        if (this.dealerHand.length > 0) {
+            const firstCard = this.dealerHand[0];
+            const value = typeof firstCard === 'string' ? firstCard.charAt(0) : firstCard.value;
+            if (value === 'A' && !this.hasInsurance && this.gameState === 'playing') {
+                this.offerInsurance();
+            }
         }
     }
 
-    updateLobby(gameState) {
-        const lobbyList = this.elements.lobbyList;
-        lobbyList.innerHTML = '';
-
-        const players = gameState.players || [];
-        const currentTurn = gameState.currentPlayer;
-
-        players.forEach(player => {
-            const playerDiv = document.createElement('div');
-            playerDiv.className = `lobby-player${player.username === currentTurn ? ' current-turn' : ''}`;
-
-            // Player name and chips
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'player-name';
-            nameSpan.textContent = player.username;
-            
-            const chipsSpan = document.createElement('span');
-            chipsSpan.className = 'player-chips';
-            chipsSpan.textContent = `${player.chips} chips`;
-
-            // Player status
-            const statusSpan = document.createElement('span');
-            statusSpan.className = 'player-status';
-            if (player.username === currentTurn) {
-                statusSpan.textContent = 'Playing';
-                statusSpan.classList.add('status-playing');
-            } else if (player.bet > 0) {
-                statusSpan.textContent = 'Waiting';
-                statusSpan.classList.add('status-waiting');
+    showRoundEndMessage(data) {
+        let message = '';
+        const playerResult = data.winners.find(w => w.username === this.username);
+        
+        if (playerResult) {
+            if (playerResult.result === 'win') {
+                message = `You won ${playerResult.amount} chips! `;
+            } else if (playerResult.result === 'push') {
+                message = 'Push! Your bet has been returned. ';
             } else {
-                statusSpan.textContent = 'Betting';
-                statusSpan.classList.add('status-betting');
+                message = `You lost ${playerResult.amount} chips. `;
             }
-
-            // Player hand
-            const handDiv = document.createElement('div');
-            handDiv.className = 'player-hand';
-            
-            if (player.hand && player.hand.length > 0) {
-                player.hand.forEach(card => {
-                    if (card.hidden && player.username !== this.username) {
-                        const cardImg = document.createElement('img');
-                        cardImg.src = '/img/cards/back.png';
-                        cardImg.alt = 'Hidden Card';
-                        handDiv.appendChild(cardImg);
-                    } else {
-                        const cardImg = document.createElement('img');
-                        cardImg.src = `/img/cards/${card.value}_of_${card.suit}.png`;
-                        cardImg.alt = `${card.value} of ${card.suit}`;
-                        handDiv.appendChild(cardImg);
-                    }
-                });
-            }
-
-            playerDiv.appendChild(nameSpan);
-            playerDiv.appendChild(statusSpan);
-            playerDiv.appendChild(handDiv);
-            playerDiv.appendChild(chipsSpan);
-            lobbyList.appendChild(playerDiv);
-        });
-    }
-
-    showRoundEndMessage(state, player) {
-        if (!player) return;
-        
-        const dealerScore = state.dealer.score;
-        const playerScore = player.score;
-        let result = '';
-        
-        if (player.status === 'bust') {
-            result = 'Game Over - Bust! You lost this round.';
-            this.showMessage(result, 'error');
-        } else if (dealerScore > 21) {
-            result = 'You Win! Dealer bust with ' + dealerScore;
-            this.showMessage(result, 'success');
-        } else if (playerScore > dealerScore) {
-            result = 'You Win! ' + playerScore + ' beats dealer\'s ' + dealerScore;
-            this.showMessage(result, 'success');
-        } else if (playerScore === dealerScore) {
-            result = 'Push! Tied with dealer at ' + playerScore;
-            this.showMessage(result, 'info');
-        } else {
-            result = 'Dealer Wins with ' + dealerScore + ' vs your ' + playerScore;
-            this.showMessage(result, 'error');
         }
-        
-        this.showMessage('Place your bet to join the next round', 'info', true);
-    }
 
-    startBettingCountdown() {
-        let countdown = 10;
-        this.showMessage(`Game starting in ${countdown} seconds...`, 'info', true);
-        
-        const countdownInterval = setInterval(() => {
-            countdown--;
-            if (countdown > 0) {
-                this.showMessage(`Game starting in ${countdown} seconds...`, 'info', true);
-            } else {
-                clearInterval(countdownInterval);
-                this.socket.emit('startGame', { tableId: this.tableId });
-            }
-        }, 1000);
-    }
-
-    renderDealerCards(showAll = false) {
-        this.elements.dealerCards.innerHTML = '';
-        this.dealerHand.forEach((card, index) => {
-            // Only show first card unless showAll is true or it's the first card
-            const faceUp = showAll || index === 0;
-            const cardElement = this.createCardElement(card, faceUp);
-            this.elements.dealerCards.appendChild(cardElement);
-        });
-
-        if (showAll && this.dealerScore > 0) {
-            this.elements.dealerScore.textContent = `Dealer Score: ${this.dealerScore}`;
-        } else {
-            this.elements.dealerScore.textContent = '';
-        }
+        message += `\nDealer's score: ${this.dealerScore}`;
+        this.showMessage(message, playerResult?.result === 'win' ? 'success' : 'info');
     }
 
     renderPlayerCards() {
-        this.elements.playerCards.innerHTML = '';
+        const cardsContainer = this.elements.playerCards;
+        cardsContainer.innerHTML = '';
+        
         this.playerHand.forEach(card => {
-            this.elements.playerCards.appendChild(this.createCardElement(card, true));
+            const cardElement = this.createCardElement(card, true);
+            cardsContainer.appendChild(cardElement);
         });
-        this.elements.playerScore.textContent = `Score: ${this.playerScore}`;
+        
+        // Update score
+        if (this.playerHand.length > 0) {
+            this.elements.playerScore.textContent = `Score: ${this.playerScore}`;
+        } else {
+            this.elements.playerScore.textContent = '';
+        }
     }
 
-    createCardElement(card, faceUp) {
-        const cardDiv = document.createElement('div');
-        cardDiv.className = 'card dealt';
+    renderDealerCards(showAll = false) {
+        console.log('[Client] Rendering dealer cards, showAll:', showAll);
+        
+        // Clear existing cards
+        if (this.elements.dealerCards) {
+            this.elements.dealerCards.innerHTML = '';
+        }
+
+        if (!this.dealerHand || !Array.isArray(this.dealerHand)) {
+            console.warn('[Client] No dealer hand to render');
+            return;
+        }
+
+        // Create card container with proper spacing
+        const cardContainer = document.createElement('div');
+        cardContainer.className = 'card-container';
+        
+        this.dealerHand.forEach((card, index) => {
+            // First card is face up, others depend on showAll
+            const faceUp = index === 0 || showAll;
+            const cardElement = this.createCardElement(card, faceUp);
+            
+            // Add animation class for new cards
+            if (this.gameState === 'dealer' && index === this.dealerHand.length - 1) {
+                cardElement.classList.add('dealt');
+            }
+            
+            // Add data attributes for face cards
+            if (['K', 'Q', 'J', 'A'].includes(card.value)) {
+                cardElement.setAttribute('data-value', card.value);
+            }
+            
+            // Position cards with slight overlap
+            cardElement.style.marginLeft = index > 0 ? '-40px' : '0';
+            cardElement.style.zIndex = index;
+            
+            cardContainer.appendChild(cardElement);
+        });
+
+        // Add score display if showing all cards
+        if (showAll && this.dealerScore !== undefined) {
+            const scoreElement = document.createElement('div');
+            scoreElement.className = 'score';
+            scoreElement.textContent = `Score: ${this.dealerScore}`;
+            cardContainer.appendChild(scoreElement);
+        }
+
+        if (this.elements.dealerCards) {
+            this.elements.dealerCards.appendChild(cardContainer);
+        }
+    }
+
+    createCardElement(card, faceUp = true) {
+        const cardElement = document.createElement('div');
+        cardElement.className = faceUp ? 'card' : 'card card-back';
         
         if (faceUp) {
-            const suit = card.suit;
-            cardDiv.classList.add(this.getSuitClass(suit));
+            // Main card container
+            const innerCard = document.createElement('div');
+            innerCard.className = 'card-inner';
             
-            // Create top-left corner
-            const topLeft = document.createElement('div');
-            topLeft.className = 'card-corner top-left';
-            topLeft.innerHTML = `
-                <span class="card-value">${card.value}</span>
-                <span class="card-suit">${suit}</span>
+            // Add suit-based styling
+            const suitClass = this.getSuitClass(card.suit);
+            innerCard.classList.add(suitClass);
+            
+            // Create corner values
+            const cornerTop = document.createElement('div');
+            cornerTop.className = 'corner top';
+            cornerTop.innerHTML = `
+                <span class="value">${card.value}</span>
+                <span class="suit">${card.suit}</span>
             `;
             
-            // Create center suit
-            const center = document.createElement('div');
-            center.className = 'card-center';
-            center.textContent = suit;
-            
-            // Create bottom-right corner (rotated 180deg)
-            const bottomRight = document.createElement('div');
-            bottomRight.className = 'card-corner bottom-right';
-            bottomRight.innerHTML = `
-                <span class="card-value">${card.value}</span>
-                <span class="card-suit">${suit}</span>
+            const cornerBottom = document.createElement('div');
+            cornerBottom.className = 'corner bottom';
+            cornerBottom.innerHTML = `
+                <span class="value">${card.value}</span>
+                <span class="suit">${card.suit}</span>
             `;
             
-            cardDiv.appendChild(topLeft);
-            cardDiv.appendChild(center);
-            cardDiv.appendChild(bottomRight);
+            // Create center pip
+            const centerPip = document.createElement('div');
+            centerPip.className = 'center-pip';
+            centerPip.innerHTML = `
+                <span class="big-suit">${card.suit}</span>
+                <span class="big-value">${card.value}</span>
+            `;
+            
+            // Add shine effect
+            const shine = document.createElement('div');
+            shine.className = 'card-shine';
+            
+            // Assemble card
+            innerCard.appendChild(cornerTop);
+            innerCard.appendChild(centerPip);
+            innerCard.appendChild(cornerBottom);
+            innerCard.appendChild(shine);
+            cardElement.appendChild(innerCard);
         } else {
-            cardDiv.classList.add('card-back');
+            // Back of card design
+            const backDesign = document.createElement('div');
+            backDesign.className = 'card-back-design';
+            cardElement.appendChild(backDesign);
         }
         
-        return cardDiv;
+        return cardElement;
     }
 
     getSuitClass(suit) {
-        switch(suit) {
-            case '♥': return 'hearts';
-            case '♦': return 'diamonds';
+        switch (suit) {
             case '♠': return 'spades';
+            case '♥': return 'hearts';
             case '♣': return 'clubs';
+            case '♦': return 'diamonds';
             default: return '';
         }
+    }
+
+    getCardValue(value) {
+        if (value === 'A') return 11;
+        if (['K', 'Q', 'J'].includes(value)) return 10;
+        return parseInt(value);
     }
 
     updateControls(state) {
@@ -627,7 +678,343 @@ class BlackjackGame {
             </div>
         `;
     }
+
+    getCardDescription(card) {
+        let value, suit;
+        if (typeof card === 'string') {
+            [value, suit] = card.split('');
+        } else {
+            value = card.value;
+            suit = card.suit;
+        }
+        return `${this.valueMap[value] || value} of ${suit}`;
+    }
+
+    async animateCardReveal(cardElement) {
+        cardElement.style.transition = 'transform 0.5s ease-in-out';
+        cardElement.style.transform = 'rotateY(90deg)';
+        
+        await new Promise(resolve => setTimeout(resolve, 250));
+        cardElement.classList.remove('card-back');
+        cardElement.style.transform = 'rotateY(0deg)';
+        
+        return new Promise(resolve => setTimeout(resolve, 250));
+    }
+
+    async handleDealerTurn(data) {
+        console.log('[Client] Dealer turn started:', data);
+        
+        // Only handle if we're not already in dealer state
+        if (this.gameState === 'dealer') {
+            console.log('[Client] Already in dealer state, ignoring');
+            return;
+        }
+        
+        this.gameState = 'dealer';
+        this.dealerHand = data.dealerHand;
+        this.dealerScore = data.dealerScore;
+        
+        if (data.debug) {
+            console.log('[Dealer Debug]', data.debug);
+        }
+        
+        // Disable all controls
+        this.disableAllControls();
+        
+        // Add active dealer styling
+        const dealerArea = this.elements.dealerCards;
+        if (dealerArea) {
+            dealerArea.classList.add('dealer-active');
+        }
+        
+        // First reveal all current dealer cards
+        console.log('[Client] Revealing all dealer cards');
+        this.renderDealerCards(true);
+        
+        this.showMessage("Dealer's turn...", 'info');
+        
+        // Request dealer to start their turn
+        this.socket.emit('requestDealerTurn', { tableId: this.tableId });
+    }
+
+    async handleDealerCard(data) {
+        console.log('[Client] Dealer drew card:', data);
+        const { card, dealerHand, dealerScore, willDrawAgain, debug } = data;
+        
+        // Only handle if we're in dealer state
+        if (this.gameState !== 'dealer') {
+            console.log('[Client] Not in dealer state, ignoring card draw');
+            return;
+        }
+        
+        if (debug) {
+            console.log('[Dealer Debug]', debug);
+        }
+        
+        // Update dealer's hand and score
+        this.dealerHand = dealerHand;
+        this.dealerScore = dealerScore;
+        
+        // Render all cards with new card
+        console.log('[Client] Updating dealer display with new card');
+        this.renderDealerCards(true);
+        
+        // Show message about the card draw
+        this.showMessage(`Dealer draws ${this.getCardDescription(card)}. Score: ${dealerScore}`, 'info');
+        
+        // If dealer will draw again, show anticipation message
+        if (willDrawAgain) {
+            setTimeout(() => {
+                if (this.gameState === 'dealer') {  // Only show if still in dealer state
+                    this.showMessage('Dealer must draw again...', 'info');
+                }
+            }, 1000);
+        }
+    }
+
+    handleDealerStand(data) {
+        console.log('[Client] Dealer stands:', data);
+        const { dealerScore, message, debug } = data;
+        
+        // Only handle if we're in dealer state
+        if (this.gameState !== 'dealer') {
+            console.log('[Client] Not in dealer state, ignoring stand');
+            return;
+        }
+        
+        if (debug) {
+            console.log('[Dealer Debug]', debug);
+        }
+        
+        // Remove active dealer styling
+        const dealerArea = this.elements.dealerCards;
+        if (dealerArea) {
+            dealerArea.classList.remove('dealer-active');
+        }
+        
+        // Make sure all cards are visible
+        this.renderDealerCards(true);
+        
+        // Show dealer's final decision
+        this.showMessage(message, 'info');
+    }
+
+    handleRoundEnd(data) {
+        console.log('[Client] Round ended:', data);
+        
+        // Only handle if we're not already in roundEnd state
+        if (this.gameState === 'roundEnd') {
+            console.log('[Client] Already in roundEnd state, ignoring');
+            return;
+        }
+        
+        this.gameState = 'roundEnd';
+        this.dealerHand = data.dealerHand;
+        this.dealerScore = data.dealerScore;
+        
+        // Show all cards
+        this.renderDealerCards(true);
+        this.renderPlayerCards();
+        
+        // Update chips
+        if (data.players) {
+            const playerData = data.players.find(p => p.username === this.username);
+            if (playerData) {
+                this.chips = playerData.chips;
+                this.updateChipsDisplay();
+            }
+        }
+        
+        // Show round results
+        if (data.winners && data.losers) {
+            if (data.winners.includes(this.username)) {
+                this.showMessage('You won!', 'success');
+            } else if (data.losers.includes(this.username)) {
+                this.showMessage('You lost.', 'error');
+            } else {
+                this.showMessage('Push - your bet has been returned.', 'info');
+            }
+        }
+        
+        // Enable deal button for next round after a delay
+        setTimeout(() => {
+            if (this.gameState === 'roundEnd') {  // Only enable if still in roundEnd state
+                if (this.elements.dealBtn) this.elements.dealBtn.disabled = false;
+                if (this.elements.betInput) this.elements.betInput.disabled = false;
+                if (this.elements.betBtn) this.elements.betBtn.disabled = false;
+                this.showMessage('Place your bets for the next round!', 'info');
+            }
+        }, 3000);
+    }
+
+    renderCardContent(cardElement, card) {
+        console.log('[Client] Rendering card content:', card);
+        
+        // Ensure card object has required properties
+        if (!card || !card.suit || !card.value) {
+            console.error('[Client] Invalid card object:', card);
+            return;
+        }
+
+        // Add color class based on suit
+        if (card.suit === '♥' || card.suit === '♦') {
+            cardElement.classList.add('red');
+        }
+
+        // Create card value elements
+        const valueTop = document.createElement('div');
+        valueTop.className = 'card-value-top';
+        valueTop.textContent = `${card.value}${card.suit}`;
+
+        const valueBottom = document.createElement('div');
+        valueBottom.className = 'card-value-bottom';
+        valueBottom.textContent = `${card.value}${card.suit}`;
+
+        const valueCenter = document.createElement('div');
+        valueCenter.className = 'card-value-center';
+        valueCenter.textContent = card.suit;
+
+        cardElement.appendChild(valueTop);
+        cardElement.appendChild(valueCenter);
+        cardElement.appendChild(valueBottom);
+    }
+
+    getCardDescription(card) {
+        let value, suit;
+        if (typeof card === 'string') {
+            [value, suit] = card.split('');
+        } else {
+            value = card.value;
+            suit = card.suit;
+        }
+        return `${this.valueMap[value] || value} of ${suit}`;
+    }
+
+    async animateCardReveal(cardElement) {
+        cardElement.style.transition = 'transform 0.5s ease-in-out';
+        cardElement.style.transform = 'rotateY(90deg)';
+        
+        await new Promise(resolve => setTimeout(resolve, 250));
+        cardElement.classList.remove('card-back');
+        cardElement.style.transform = 'rotateY(0deg)';
+        
+        return new Promise(resolve => setTimeout(resolve, 250));
+    }
+
+    disableAllControls() {
+        // Check each element before disabling
+        const controls = ['hitBtn', 'standBtn', 'dealBtn', 'betBtn', 'betInput', 'placeBetBtn'];
+        controls.forEach(control => {
+            if (this.elements[control]) {
+                this.elements[control].disabled = true;
+            } else {
+                console.warn(`[Client] Missing control element: ${control}`);
+            }
+        });
+    }
+
+    updateDealerScore(score) {
+        console.log('[Client] Updating dealer score:', score);
+        const scoreElement = document.createElement('div');
+        scoreElement.className = 'score';
+        scoreElement.textContent = `Score: ${score}`;
+        
+        // Remove old score if exists
+        const oldScore = this.elements.dealerCards.querySelector('.score');
+        if (oldScore) {
+            oldScore.remove();
+        }
+        
+        this.elements.dealerCards.appendChild(scoreElement);
+    }
+
+    startConnectionMonitoring() {
+        // Send ping every 30 seconds
+        this.connectionMonitoring = setInterval(() => {
+            if (Date.now() - this.lastPong > 60000) { // No pong for 1 minute
+                this.handleConnectionLoss();
+                return;
+            }
+            
+            this.socket.emit('ping');
+        }, 30000);
+
+        // Listen for pong responses
+        this.socket.on('pong', () => {
+            this.lastPong = Date.now();
+            this.reconnectAttempts = 0; // Reset reconnect attempts on successful pong
+        });
+
+        // Handle disconnection
+        this.socket.on('disconnect', () => {
+            this.handleConnectionLoss();
+        });
+    }
+
+    handleConnectionLoss() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.showMessage('Connection lost. Please refresh the page.', 'error');
+            clearInterval(this.connectionMonitoring);
+            return;
+        }
+
+        this.reconnectAttempts++;
+        this.showMessage('Attempting to reconnect...', 'warning');
+        
+        // Attempt to reconnect
+        this.socket.connect();
+        
+        // Re-join game on reconnection
+        this.socket.once('connect', () => {
+            this.socket.emit('joinGame', {
+                username: this.username,
+                tableId: this.tableId
+            });
+            this.showMessage('Reconnected!', 'success');
+        });
+    }
+
+    cleanup() {
+        if (this.connectionMonitoring) {
+            clearInterval(this.connectionMonitoring);
+        }
+        if (this.socket) {
+            this.socket.disconnect();
+        }
+    }
+
+    addDealerStyles() {
+        const style = document.createElement('style');
+        style.textContent = `
+            .dealer-active {
+                box-shadow: 0 0 15px #4CAF50;
+                animation: dealerPulse 1.5s infinite;
+            }
+            
+            @keyframes dealerPulse {
+                0% { box-shadow: 0 0 15px #4CAF50; }
+                50% { box-shadow: 0 0 25px #4CAF50; }
+                100% { box-shadow: 0 0 15px #4CAF50; }
+            }
+            
+            .dealer-card-draw {
+                animation: cardDraw 0.5s ease-out;
+            }
+            
+            @keyframes cardDraw {
+                from {
+                    transform: translateY(-50px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
 }
 
 // Initialize game when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => new BlackjackGame());
+document.addEventListener('DOMContentLoaded', () => new BlackjackGame(localStorage.getItem('username'), 'table1'));

@@ -5,8 +5,8 @@
     --text-color: #ffffff;
     --error-color: #ff4444;
     --success-color: #00c851;
-    --card-width: 100px;
-    --card-height: 145px;
+    --card-width: 120px;
+    --card-height: 168px;
     --table-green: #2c5530;
     --dark-green: #1e3d23;
     --light-green: #397042;
@@ -186,79 +186,38 @@ body {
 }
 
 .other-player {
-    background: rgba(45, 106, 79, 0.5);
+    background: rgba(0, 0, 0, 0.2);
     padding: 15px;
     border-radius: 8px;
-    border: 1px solid var(--accent-color);
-    transition: all 0.3s ease;
-}
-
-.other-player.current-turn {
-    border: 2px solid var(--accent-color);
-    box-shadow: 0 0 10px var(--accent-color);
-    transform: scale(1.02);
-}
-
-.other-player .player-cards {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 5px;
-    margin-top: 10px;
-}
-
-.other-player .card {
-    width: 60px;
-    height: 87px;
-    font-size: 0.8em;
-}
-
-.other-player .player-info {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
+    min-width: 200px;
 }
 
 .other-player .player-name {
     font-weight: bold;
     color: var(--accent-color);
+    margin-bottom: 5px;
 }
 
-.other-player .player-status {
-    font-size: 0.9em;
-    margin-top: 5px;
-    color: #ccc;
-}
-
-.cards-area {
+.other-player .player-cards {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-    margin: 15px 0;
+    gap: 5px;
+    margin: 10px 0;
 }
 
-.card {
+.other-player .card {
     width: var(--card-width);
     height: var(--card-height);
-    margin: 5px;
-    background-color: white;
+    background: white;
     border-radius: 8px;
     position: relative;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    color: black;
+    padding: 5px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 8px;
-    font-family: 'Arial', sans-serif;
-    transition: transform 0.3s ease;
 }
 
-.card.dealt {
-    animation: dealCard 0.5s ease-out;
-}
-
-.card-back {
+.other-player .card-back {
     background: linear-gradient(45deg, var(--secondary-color) 25%, transparent 25%),
                 linear-gradient(-45deg, var(--secondary-color) 25%, transparent 25%),
                 linear-gradient(45deg, transparent 75%, var(--secondary-color) 75%),
@@ -267,6 +226,234 @@ body {
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
     background-color: var(--primary-color);
     border: 2px solid var(--accent-color);
+    background: linear-gradient(45deg, #1a472a, #2d5a3f);
+    border: 2px solid #0a1f12;
+    position: relative;
+}
+
+.other-player.current-turn {
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
+.multiplayer-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    min-height: calc(var(--card-height) + 20px);
+    padding: 10px;
+}
+
+.card {
+    width: var(--card-width);
+    height: var(--card-height);
+    margin: 5px;
+    position: relative;
+    perspective: 1000px;
+    cursor: default;
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.card-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), 
+                0 0 0 1px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 8px;
+    font-family: 'Arial', sans-serif;
+}
+
+/* Suit Colors */
+.spades {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+    color: #2D3436;
+}
+
+.hearts {
+    background: linear-gradient(135deg, #ffffff 0%, #fff0f0 100%);
+    color: #E84393;
+}
+
+.clubs {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+    color: #2D3436;
+}
+
+.diamonds {
+    background: linear-gradient(135deg, #ffffff 0%, #fff0f0 100%);
+    color: #E84393;
+}
+
+/* Corner Values */
+.corner {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+    font-weight: bold;
+}
+
+.corner.top {
+    top: 8px;
+    left: 8px;
+}
+
+.corner.bottom {
+    bottom: 8px;
+    right: 8px;
+    transform: rotate(180deg);
+}
+
+.corner .value {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.corner .suit {
+    font-size: 20px;
+    line-height: 1;
+}
+
+/* Center Pip */
+.center-pip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+}
+
+.big-suit {
+    font-size: 60px;
+    line-height: 1;
+    margin-bottom: -10px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.big-value {
+    font-size: 40px;
+    font-weight: 800;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Back */
+.card-back {
+    background: linear-gradient(135deg, #6C5CE7 0%, #4834d4 100%);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.card-back-design {
+    width: 100%;
+    height: 100%;
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.1) 0px,
+        rgba(255, 255, 255, 0.1) 2px,
+        transparent 2px,
+        transparent 4px
+    );
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-back-design::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 80%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Shine Effect */
+.card-shine {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.4) 0%,
+        rgba(255, 255, 255, 0) 60%
+    );
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Card Animations */
+@keyframes dealCard {
+    from {
+        transform: translateY(-100vh) rotate(-180deg);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) rotate(0);
+        opacity: 1;
+    }
+}
+
+.card.dealt {
+    animation: dealCard 0.5s ease-out forwards;
+}
+
+/* Face Card Styles */
+.card[data-value="K"] .big-value,
+.card[data-value="Q"] .big-value,
+.card[data-value="J"] .big-value {
+    font-size: 50px;
+    font-weight: 900;
+    letter-spacing: -1px;
+}
+
+/* Ace Styles */
+.card[data-value="A"] .big-value {
+    font-size: 60px;
+    font-weight: 900;
+    color: inherit;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Hover Effects */
+.card:hover .card-shine {
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+/* Active Player Card Highlight */
+.current-turn .card {
+    box-shadow: 0 0 20px rgba(108, 92, 231, 0.5);
+    transform: translateY(-10px);
 }
 
 .game-header {
@@ -405,111 +592,6 @@ body {
     }
 }
 
-.multiplayer-area {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-}
-
-.cards {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin: 15px 0;
-    min-height: var(--card-height);
-}
-
-.card {
-    width: var(--card-width);
-    height: var(--card-height);
-    margin: 5px;
-    background-color: white;
-    border-radius: 8px;
-    position: relative;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 8px;
-    font-family: 'Arial', sans-serif;
-    transition: transform 0.3s ease;
-}
-
-.card.dealt {
-    animation: dealCard 0.5s ease-out;
-}
-
-.card-back {
-    background: linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
-                linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
-                linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
-    background-size: 20px 20px;
-    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-    background-color: #2d2d2d;
-    border: 2px solid #gold;
-}
-
-.card-value {
-    font-size: 24px;
-    font-weight: bold;
-    text-align: center;
-}
-
-.card.hearts, .card.diamonds {
-    color: #e44145;
-}
-
-.card.spades, .card.clubs {
-    color: #2d2d2d;
-}
-
-.card-corner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    font-size: 16px;
-    line-height: 1;
-}
-
-.card-corner.top-left {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-}
-
-.card-corner.bottom-right {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    transform: rotate(180deg);
-}
-
-.card-suit {
-    font-size: 20px;
-}
-
-.card-center {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 48px;
-}
-
-@keyframes dealCard {
-    from {
-        transform: translateY(-100px) rotate(-10deg);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0) rotate(0);
-        opacity: 1;
-    }
-}
-
 .chat-box {
     background: rgba(0, 0, 0, 0.3);
     border-radius: 8px;
@@ -610,46 +692,38 @@ button:disabled::after {
 }
 
 /* Game action buttons */
+.game-controls {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+
 .game-controls button {
-    flex: 1;
-    min-width: 80px;
-    font-size: 1.1em;
-    position: relative;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
 }
 
-.game-controls button:disabled::before {
-    content: '⊘';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 1.5em;
-    opacity: 0.7;
-    color: #ff4444;
+.game-controls button:hover {
+    background-color: var(--light-green);
 }
 
-#hit-btn {
-    background: #2ecc71;
+.game-controls button:disabled {
+    background-color: #666;
+    cursor: not-allowed;
 }
 
-#hit-btn:hover:not(:disabled) {
-    background: #27ae60;
+#toggle-cards-btn {
+    background-color: var(--accent-color);
+    color: var(--primary-color);
 }
 
-#stand-btn {
-    background: #e74c3c;
-}
-
-#stand-btn:hover:not(:disabled) {
-    background: #c0392b;
-}
-
-#deal-btn {
-    background: var(--accent-color);
-}
-
-#deal-btn:hover:not(:disabled) {
-    background: #e5c14c;
+#toggle-cards-btn:hover {
+    background-color: #c19b2f;
 }
 
 /* Betting controls */
@@ -888,4 +962,223 @@ button:disabled::after {
 
 .status-betting {
     background: #3498db;
+}
+
+/* Dealer Area Styles */
+#dealer-cards {
+    min-height: calc(var(--card-height) + 40px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    position: relative;
+}
+
+#dealer-cards .card-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: var(--card-width);
+    position: relative;
+}
+
+/* Dealer Score */
+#dealer-cards .score {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 5px 15px;
+    border-radius: 15px;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    animation: scorePopIn 0.3s ease-out forwards;
+}
+
+@keyframes scorePopIn {
+    from {
+        transform: translate(-50%, 10px);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+}
+
+/* Dealer Active State */
+#dealer-cards.dealer-active {
+    animation: dealerPulse 2s infinite;
+}
+
+@keyframes dealerPulse {
+    0% {
+        box-shadow: 0 0 20px rgba(108, 92, 231, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(108, 92, 231, 0.4);
+    }
+    100% {
+        box-shadow: 0 0 20px rgba(108, 92, 231, 0.2);
+    }
+}
+
+/* Card Back Enhanced Design */
+.card.card-back {
+    background: linear-gradient(135deg, #6C5CE7 0%, #4834d4 100%);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.card-back-design {
+    width: 100%;
+    height: 100%;
+    background-image: 
+        linear-gradient(45deg, 
+            rgba(255, 255, 255, 0.1) 25%, 
+            transparent 25%, 
+            transparent 75%, 
+            rgba(255, 255, 255, 0.1) 75%
+        ),
+        linear-gradient(45deg, 
+            rgba(255, 255, 255, 0.1) 25%, 
+            transparent 25%, 
+            transparent 75%, 
+            rgba(255, 255, 255, 0.1) 75%
+        );
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    position: relative;
+}
+
+.card-back-design::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+}
+
+.card-back-design::after {
+    content: '♠';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 40px;
+    color: rgba(255, 255, 255, 0.3);
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+/* Card Deal Animation */
+.card.dealt {
+    animation: dealCardToDealer 0.5s ease-out forwards;
+}
+
+@keyframes dealCardToDealer {
+    from {
+        transform: translateY(-100px) rotate(-10deg);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) rotate(0);
+        opacity: 1;
+    }
+}
+
+/* Card Stack Effect */
+#dealer-cards .card:not(:first-child) {
+    margin-left: -40px;
+    transition: transform 0.3s ease;
+}
+
+#dealer-cards .card:hover {
+    transform: translateY(-10px) rotate(2deg);
+    z-index: 10;
+}
+
+#dealer-cards .card:hover ~ .card {
+    transform: translateX(20px);
+}
+
+/* Login Card Decoration */
+.card-decoration {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.login-card {
+    width: 100px;
+    height: 140px;
+    perspective: 1000px;
+    position: relative;
+}
+
+.login-card .card {
+    width: 100%;
+    height: 100%;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Arial', sans-serif;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s;
+}
+
+.login-card .card:hover {
+    transform: translateY(-5px) rotateY(10deg);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.login-card .card-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+}
+
+.login-card .card-value {
+    font-size: 2.5em;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.login-card .card-suit {
+    font-size: 3em;
+    line-height: 1;
+}
+
+/* Card shine effect */
+.login-card .card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    border-radius: 10px;
+    pointer-events: none;
 }

@@ -1,0 +1,8 @@
+[
+    {
+        "id": "example_id",
+        "username": "example_user",
+        "password": "hashed_password_will_be_here",
+        "chips": 1000
+    }
+]

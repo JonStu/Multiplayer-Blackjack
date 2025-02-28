@@ -12,8 +12,8 @@
         <div class="auth-box">
             <div class="casino-decoration">
                 <div class="card-decoration">
-                    <img src="img/spade.png" alt="Spade" class="card card-spade">
-                    <img src="img/heart.png" alt="Heart" class="card card-heart">
+                    <div class="login-card card-1"></div>
+                    <div class="login-card card-2"></div>
                 </div>
                 <h1 class="casino-title">Blackjack</h1>
             </div>
@@ -70,12 +70,6 @@
 
     <!-- Game Container -->
     <div id="game-container" class="hidden">
-        <div class="lobby-section">
-            <h2>Players Online</h2>
-            <div class="lobby-list" id="lobby-list">
-                <!-- Players will be added here dynamically -->
-            </div>
-        </div>
         <div class="game-header">
             <div class="player-info">
                 <span>Player: <span id="player-name"></span></span>
@@ -117,10 +111,6 @@
 
                 <!-- Controls Area -->
                 <div class="controls-section">
-                    <div class="player-info">
-                        <span id="player-name"></span>
-                        <span id="chips-count"></span>
-                    </div>
                     <div class="betting-controls">
                         <input type="number" id="bet-amount" min="1" value="10">
                         <button id="place-bet-btn">Place Bet</button>
@@ -129,6 +119,7 @@
                         <button id="hit-btn" disabled>Hit</button>
                         <button id="stand-btn" disabled>Stand</button>
                         <button id="deal-btn" disabled>Deal</button>
+                        <button id="toggle-cards-btn">Show Other Cards</button>
                     </div>
                     <div class="chat-box">
                         <div id="chat-messages"></div>

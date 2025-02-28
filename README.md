@@ -41,12 +41,26 @@ git clone https://github.com/JonStu/Multiplayer-Blackjack.git
 npm install
 ```
 
-3. Start the server:
+3. Set up user data:
+```bash
+# Create the data directory if it doesn't exist
+mkdir -p data
+# Copy the template users file
+cp data/users.json.template data/users.json
+```
+
+4. Start the server:
 ```bash
 node server.js
 ```
 
-4. Open your browser and navigate to `http://localhost:3000`
+5. Open your browser and navigate to `http://localhost:3000`
+
+## Development Setup
+
+- The `data/users.json` file is gitignored to prevent committing user data
+- Use the `users.json.template` as a reference for the user data structure
+- All sensitive data should be stored in environment variables (create a `.env` file)
 
 ## Game Rules
 

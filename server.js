@@ -357,61 +357,115 @@ class BlackjackTable {
     }
 
     playDealerTurn() {
-        // Dealer must hit on 16 and below, stand on 17 and above
-        const dealerPlay = () => {
-            if (this.dealer.score < 17) {
-                this.dealer.cards.push(this.deck.drawCard());
-                this.dealer.score = this.calculateScore(this.dealer.cards);
-                
-                if (this.dealer.score < 17) {
-                    // Schedule next card draw with delay
-                    setTimeout(dealerPlay, 1000);
-                } else {
-                    this.endRound();
-                }
-                this.broadcastGameState();
+        console.log('[Dealer] Starting turn with cards:', this.dealer.cards);
+        
+        // Reset dealer state
+        this.state = 'dealer';
+        const initialScore = this.calculateScore(this.dealer.cards);
+        console.log('[Dealer] Initial score:', initialScore);
+        
+        // Emit initial dealer turn event to reveal cards
+        io.to(this.id).emit('dealerTurn', {
+            dealerHand: this.dealer.cards,
+            dealerScore: initialScore,
+            debug: `Starting dealer turn with score ${initialScore}`
+        });
+
+        // Start dealer's play sequence after 1 second
+        setTimeout(() => this.dealerPlaySequence(), 1000);
+    }
+
+    dealerPlaySequence() {
+        const dealerScore = this.calculateScore(this.dealer.cards);
+        console.log('[Dealer] Current score:', dealerScore, 'Cards:', this.dealer.cards);
+        
+        // Dealer must draw on 16 or below
+        if (dealerScore < 17) {
+            // Draw card and update score
+            const newCard = this.deck.drawCard();
+            this.dealer.cards.push(newCard);
+            const newScore = this.calculateScore(this.dealer.cards);
+            
+            console.log('[Dealer] Drew card:', newCard, 'New score:', newScore);
+            
+            // Emit the card draw event
+            io.to(this.id).emit('dealerCard', {
+                card: newCard,
+                dealerHand: this.dealer.cards,
+                dealerScore: newScore,
+                willDrawAgain: newScore < 17,
+                debug: `Drew ${newCard.value}${newCard.suit}, score now ${newScore}`
+            });
+            
+            // Continue drawing after 1.5 seconds if needed
+            if (newScore < 17) {
+                setTimeout(() => this.dealerPlaySequence(), 1500);
             } else {
                 this.endRound();
-                this.broadcastGameState();
             }
-        };
-
-        dealerPlay();
+        } else {
+            // Dealer stands
+            io.to(this.id).emit('dealerStand', {
+                dealerScore,
+                message: `Dealer stands with ${dealerScore}`,
+                debug: `Standing with score ${dealerScore}`
+            });
+            
+            // End the round
+            this.endRound();
+        }
     }
 
     endRound() {
+        if (this.state !== 'dealer') {
+            console.log('[Dealer] Ignoring endRound call - not in dealer state');
+            return;
+        }
+        
+        console.log('[Dealer] Ending round');
         this.state = 'roundEnd';
+        
         const dealerScore = this.calculateScore(this.dealer.cards);
-        const dealerBust = dealerScore > 21;
-
+        const winners = [];
+        const losers = [];
+        
+        // Calculate winners and losers
         for (const player of this.players) {
             if (player.bet === 0) continue;
-
-            // Handle insurance bets
-            if (player.insurance > 0) {
-                if (dealerScore === 21 && this.dealer.cards.length === 2) {
-                    player.chips += player.insurance * 3;
-                }
-            }
-
-            // Handle main bets
+            
+            const playerScore = this.calculateScore(player.cards);
+            let winAmount = 0;
+            
             if (player.status === 'bust') {
-                // Player loses
-                continue;
-            } else if (dealerBust || player.score > dealerScore) {
-                // Player wins
-                player.chips += player.bet * 2;
-            } else if (player.score === dealerScore) {
-                // Push
-                player.chips += player.bet;
+                losers.push(player.username);
+            } else if (dealerScore > 21 || playerScore > dealerScore) {
+                winners.push(player.username);
+                winAmount = player.bet * 2;
+            } else if (playerScore === dealerScore) {
+                winAmount = player.bet; // Push - return original bet
+            } else {
+                losers.push(player.username);
             }
-            // Otherwise player loses
-
-            player.bet = 0;
-            player.insurance = 0;
+            
+            player.chips += winAmount;
         }
 
-        this.broadcastGameState();
+        // Emit round end event
+        io.to(this.id).emit('roundEnd', {
+            dealerHand: this.dealer.cards,
+            dealerScore: dealerScore,
+            players: this.players,
+            winners,
+            losers
+        });
+
+        // Start new round after delay
+        setTimeout(() => {
+            if (this.state === 'roundEnd') {  // Only start new round if we're still in roundEnd state
+                this.startNewRound();
+                this.broadcastGameState();
+            }
+        }, 5000);
     }
 
     calculateScore(cards) {
@@ -501,46 +555,132 @@ class Deck {
 const GameState = {
     tables: new Map(), // Multiple game tables
     players: new Map(), // Player socket mappings
+    activeConnections: new Map(), // Track active connections with timestamps
     
     createTable(tableId) {
-        this.tables.set(tableId, new BlackjackTable(tableId));
-        return this.tables.get(tableId);
+        const table = new BlackjackTable(tableId);
+        this.tables.set(tableId, table);
+        return table;
     },
 
     findTableBySocket(socketId) {
         for (const table of this.tables.values()) {
-            const player = table.players.find(p => p.socketId === socketId);
-            if (player) return table;
+            if (table.players.some(p => p.socketId === socketId)) {
+                return table;
+            }
         }
         return null;
+    },
+
+    addConnection(socketId, username) {
+        this.activeConnections.set(socketId, {
+            username,
+            lastActive: Date.now(),
+            pingCount: 0
+        });
+    },
+
+    updateActivity(socketId) {
+        const connection = this.activeConnections.get(socketId);
+        if (connection) {
+            connection.lastActive = Date.now();
+            connection.pingCount = 0;
+        }
+    },
+
+    removeConnection(socketId) {
+        this.activeConnections.delete(socketId);
+        this.players.delete(socketId);
+        
+        // Remove from any tables
+        for (const table of this.tables.values()) {
+            table.removePlayer(socketId);
+        }
+    },
+
+    cleanupInactiveConnections() {
+        const now = Date.now();
+        const inactivityTimeout = 5 * 60 * 1000; // 5 minutes
+        const maxPingMisses = 3;
+
+        for (const [socketId, connection] of this.activeConnections) {
+            if (now - connection.lastActive > inactivityTimeout || connection.pingCount >= maxPingMisses) {
+                console.log(`Cleaning up inactive connection: ${connection.username}`);
+                this.removeConnection(socketId);
+            }
+        }
     }
 };
+
+// Set up periodic cleanup
+setInterval(() => {
+    GameState.cleanupInactiveConnections();
+}, 60000); // Check every minute
 
 /**
  * Socket.IO Event Handlers
  */
 io.on('connection', (socket) => {
-    socket.on('joinGame', ({ username, tableId }) => {
+    console.log('New connection:', socket.id);
+    
+    // Handle new connection
+    socket.on('joinGame', async (data) => {
+        const { username, tableId } = data;
+        
+        // Check if player is already in the game
+        const existingTable = GameState.findTableBySocket(socket.id);
+        if (existingTable) {
+            console.log(`Player ${username} already in game, cleaning up old connection`);
+            existingTable.removePlayer(socket.id);
+            GameState.removeConnection(socket.id);
+        }
+        
+        // Add to active connections
+        GameState.addConnection(socket.id, username);
+        GameState.players.set(socket.id, username);
+        
         let table = GameState.tables.get(tableId);
         if (!table) {
             table = GameState.createTable(tableId);
         }
 
-        if (table.addPlayer(username, socket.id)) {
-            socket.join(tableId);
-            io.to(tableId).emit('playerJoined', {
-                joiner: username,
-                players: table.players
-            });
-            socket.emit('gameStateUpdate', table.getGameState());
+        // Check if player already exists in table
+        const existingPlayer = table.findPlayer(username);
+        if (existingPlayer) {
+            console.log(`Removing existing player ${username} from table`);
+            table.removePlayer(existingPlayer.socketId);
         }
+        
+        const joined = table.addPlayer(username, socket.id);
+        if (!joined) {
+            socket.emit('error', { message: 'Table is full' });
+            return;
+        }
+        
+        socket.join(tableId);
+        io.to(tableId).emit('playerJoined', {
+            joiner: username,
+            players: table.players
+        });
+        
+        // Send initial game state
+        socket.emit('gameStateUpdate', table.getGameState());
     });
 
+    // Add ping/pong for connection monitoring
+    socket.on('ping', () => {
+        GameState.updateActivity(socket.id);
+        socket.emit('pong');
+    });
+
+    // Handle disconnection
     socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
         const table = GameState.findTableBySocket(socket.id);
         if (table) {
             const player = table.players.find(p => p.socketId === socket.id);
-            if (player && table.removePlayer(socket.id)) {
+            if (player) {
+                table.removePlayer(socket.id);
                 io.to(table.id).emit('playerLeft', {
                     username: player.username,
                     players: table.players
@@ -548,6 +688,9 @@ io.on('connection', (socket) => {
                 table.broadcastGameState();
             }
         }
+        
+        GameState.removeConnection(socket.id);
+        GameState.players.delete(socket.id);
     });
 
     socket.on('placeBet', ({ amount }) => {
@@ -600,6 +743,13 @@ io.on('connection', (socket) => {
         
         // Broadcast the updated state
         io.to(tableId).emit('gameStateUpdate', table.getGameState());
+    });
+
+    socket.on('requestDealerTurn', ({ tableId }) => {
+        const table = GameState.tables.get(tableId);
+        if (table && table.state === 'dealer') {
+            table.playDealerTurn();
+        }
     });
 
     socket.on('chatMessage', async (data) => {
