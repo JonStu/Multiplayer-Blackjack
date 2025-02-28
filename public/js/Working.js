@@ -151,9 +151,6 @@ class BlackjackGame {
 
         this.socket.on('gameStateUpdate', (data) => {
             console.log('[Client] Game state update:', data);
-            if (data.state === 'betting') {
-                this.resetForNewRound();
-            }
             this.updateGameState(data);
         });
 
@@ -913,29 +910,6 @@ class BlackjackGame {
                 this.showMessage(`Waiting for ${currentPlayer}'s turn...`, 'info');
             }
         }
-    }
-
-    resetForNewRound() {
-        // Reset game state
-        this.gameState = 'betting';
-        this.playerHand = [];
-        this.dealerHand = [];
-        
-        // Reset UI
-        this.elements.dealerCards.innerHTML = '';
-        this.elements.playerCards.innerHTML = '';
-        this.elements.playerScore.textContent = '';
-        
-        // Reset controls
-        this.elements.hitBtn.disabled = true;
-        this.elements.standBtn.disabled = true;
-        this.elements.doubleDownBtn.disabled = true;
-        this.elements.betBtn.disabled = false;
-        this.elements.betInput.disabled = false;
-        
-        // Update display
-        this.renderPlayerCards();
-        this.renderDealerCards();
     }
 }
 

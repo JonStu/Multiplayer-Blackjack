@@ -15,6 +15,23 @@ A real-time multiplayer Blackjack game built with Node.js, Express, and Socket.I
 
 ## Recent Updates
 
+⚠️ **EXPERIMENTAL BRANCH WARNING** ⚠️
+This branch (`experimental-dealer-turn`) contains experimental changes to the dealer turn mechanics and round reset functionality. These changes are currently under development and may contain bugs or incomplete features. Please do not use this branch in production.
+
+Changes in this branch:
+- Enhanced dealer turn completion logic
+- Improved round reset functionality
+- Better win/loss message handling
+- Smoother game state transitions
+- Enhanced chip tracking and updates
+
+Known Issues:
+- Round reset timing may need adjustment
+- Message queue might show duplicate messages in edge cases
+- Potential race conditions during state transitions
+
+For stable version, please use the `main` branch.
+
 - Added integrated chat system for player communication
 - Enhanced UI with improved button visibility and feedback
 - Implemented smart message deduplication
