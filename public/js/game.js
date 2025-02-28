@@ -5,7 +5,12 @@ class BlackjackGame {
     constructor(username, tableId) {
         this.username = username;
         this.tableId = tableId;
-        this.socket = io();
+        this.socket = io({
+            transports: ['websocket'],
+            secure: true,
+            rejectUnauthorized: false,
+            path: '/socket.io/'
+        });
         this.playerHand = [];
         this.dealerHand = [];
         this.gameState = 'betting'; // betting, playing, dealer, ended

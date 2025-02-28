@@ -17,11 +17,22 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: {
+        origin: ["https://blackjack.jonstu.dev", "http://blackjack.jonstu.dev"],
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    path: '/socket.io/',
+    transports: ['websocket'],
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: ["https://blackjack.jonstu.dev", "http://blackjack.jonstu.dev"],
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.static('public'));
 
