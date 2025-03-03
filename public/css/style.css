@@ -1195,3 +1195,21 @@ button:disabled::after {
     border-radius: 10px;
     pointer-events: none;
 }
+
+/* Help button styles */
+.help-button {
+    background-color: var(--accent-color);
+    color: var(--primary-color);
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    margin-left: 15px;
+}
+
+.help-button:hover {
+    background-color: #c19b2f;
+    transform: translateY(-2px);
+}
