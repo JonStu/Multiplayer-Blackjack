@@ -1,4 +1,4 @@
-# 🎰 Multiplayer Blackjack
+# Multiplayer Blackjack
 
 <div align="center">
 
@@ -8,23 +8,23 @@
 
 A sophisticated real-time multiplayer Blackjack game featuring a casino-grade experience.
 
-[Features](#features) • [Installation](#installation) • [How to Play](#how-to-play) • [Technical Stack](#technical-stack) • [Contributing](#contributing)
+[Features](#features) • [Installation](#installation) • [How to Play](#how-to-play) • [Technical Stack](#technical-stack)
 
 </div>
 
-## ✨ Features
+## Features
 
-- 🎮 Real-time multiplayer gameplay with seamless synchronization
-- 💰 Advanced betting system with realistic chip tracking
-- 🤖 Intelligent dealer AI following standard casino rules
-- 💬 Interactive chat system with game notifications
-- 🎨 Modern, casino-themed UI with responsive design
-- 🎯 Clear visual feedback for player actions
-- 📱 Fully responsive design for all devices
-- ❓ Comprehensive help system with game rules and strategy guide
-- 🔒 Secure user authentication system
+- Real-time multiplayer gameplay with seamless synchronization
+- Advanced betting system with realistic chip tracking
+- Intelligent dealer AI following standard casino rules
+- Interactive chat system with game notifications
+- Modern, casino-themed UI with responsive design
+- Clear visual feedback for player actions
+- Fully responsive design for all devices
+- Comprehensive help system with game rules and strategy guide
+- Secure user authentication system
 
-## 🚀 Installation
+## Installation
 
 1. Clone the repository:
 ```bash
@@ -44,7 +44,7 @@ node server.js
 
 4. Open your browser and navigate to `http://localhost:3000`
 
-## 🎮 How to Play
+## How to Play
 
 1. **Login or Create Account**
    - Use the authentication system to access your account
@@ -65,7 +65,7 @@ node server.js
    - Learn basic strategy and betting tips
    - View win conditions and payout rates
 
-## 🛠 Technical Stack
+## Technical Stack
 
 ### Backend
 - **Runtime**: `Node.js`
@@ -79,7 +79,7 @@ node server.js
 - **Layout**: Responsive HTML5
 - **Real-time Updates**: Socket.IO client
 
-## 🔧 Development
+## Development
 
 ### Prerequisites
 - Node.js (v14 or higher)
@@ -105,16 +105,12 @@ npm install --include=dev
 └── README.md          # This file
 ```
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-## 📜 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 <div align="center">
-Made with ❤️ by Jonathan Stuart
+Made by Jonathan Stuart
 </div>
