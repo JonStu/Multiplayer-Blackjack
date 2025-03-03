@@ -1,56 +1,35 @@
-# Multiplayer Blackjack
+# 🎰 Multiplayer Blackjack
 
-A real-time multiplayer Blackjack game built with Node.js, Express, and Socket.IO.
+<div align="center">
 
-## Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-43853D?style=flat&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?style=flat&logo=socket.io&logoColor=white)](https://socket.io/)
 
-- Real-time multiplayer gameplay
-- Intuitive turn-based system with alphabetical order
-- Betting system with chip tracking
-- Dealer AI that follows standard casino rules
-- Interactive chat system with game notifications
-- Modern, casino-themed UI with responsive design
-- Clear visual feedback for available actions
-- Insurance options for dealer blackjack
+A sophisticated real-time multiplayer Blackjack game featuring a casino-grade experience.
 
-## Recent Updates
+[Features](#features) • [Installation](#installation) • [How to Play](#how-to-play) • [Technical Stack](#technical-stack) • [Contributing](#contributing)
 
-⚠️ **EXPERIMENTAL BRANCH WARNING** ⚠️
-This branch (`experimental-dealer-turn`) contains experimental changes to the dealer turn mechanics and round reset functionality. These changes are currently under development and may contain bugs or incomplete features. Please do not use this branch in production.
+</div>
 
-Changes in this branch:
-- Enhanced dealer turn completion logic
-- Improved round reset functionality
-- Better win/loss message handling
-- Smoother game state transitions
-- Enhanced chip tracking and updates
+## ✨ Features
 
-Known Issues:
-- Round reset timing may need adjustment
-- Message queue might show duplicate messages in edge cases
-- Potential race conditions during state transitions
+- 🎮 Real-time multiplayer gameplay with seamless synchronization
+- 💰 Advanced betting system with realistic chip tracking
+- 🤖 Intelligent dealer AI following standard casino rules
+- 💬 Interactive chat system with game notifications
+- 🎨 Modern, casino-themed UI with responsive design
+- 🎯 Clear visual feedback for player actions
+- 📱 Fully responsive design for all devices
+- ❓ Comprehensive help system with game rules and strategy guide
+- 🔒 Secure user authentication system
 
-For stable version, please use the `main` branch.
-
-- Added integrated chat system for player communication
-- Enhanced UI with improved button visibility and feedback
-- Implemented smart message deduplication
-- Added visual indicators for available actions
-- Improved betting controls and validation
-- Enhanced casino-themed color scheme
-
-## Technical Stack
-
-- **Backend**: Node.js, Express, Socket.IO
-- **Frontend**: Vanilla JavaScript, HTML5, CSS3
-- **Real-time Communication**: Socket.IO
-- **State Management**: Custom game state handler
-
-## Getting Started
+## 🚀 Installation
 
 1. Clone the repository:
 ```bash
 git clone https://github.com/JonStu/Multiplayer-Blackjack.git
+cd Multiplayer-Blackjack
 ```
 
 2. Install dependencies:
@@ -58,54 +37,84 @@ git clone https://github.com/JonStu/Multiplayer-Blackjack.git
 npm install
 ```
 
-3. Set up user data:
-```bash
-# Create the data directory if it doesn't exist
-mkdir -p data
-# Copy the template users file
-cp data/users.json.template data/users.json
-```
-
-4. Start the server:
+3. Start the server:
 ```bash
 node server.js
 ```
 
-5. Open your browser and navigate to `http://localhost:3000`
+4. Open your browser and navigate to `http://localhost:3000`
 
-## Development Setup
+## 🎮 How to Play
 
-- The `data/users.json` file is gitignored to prevent committing user data
-- Use the `users.json.template` as a reference for the user data structure
-- All sensitive data should be stored in environment variables (create a `.env` file)
+1. **Login or Create Account**
+   - Use the authentication system to access your account
+   - Your chips and game history are automatically saved
 
-## Game Rules
+2. **Place Your Bet**
+   - Click on chips to select bet amount
+   - Confirm your bet to join the round
 
-- Players are dealt two cards initially
-- Players take turns in alphabetical order
-- Dealer always plays last
-- Players can Hit or Stand during their turn
-- Dealer must hit on 16 and stand on 17
-- Insurance is offered when dealer shows an Ace
-- Blackjack pays 3:2
-- Insurance pays 2:1
+3. **Game Actions**
+   - **Hit**: Request another card
+   - **Stand**: Keep your current hand
+   - **Double Down**: Double your bet and receive one more card
+   - **Insurance**: Available when dealer shows an Ace
 
-## UI Features
+4. **Game Rules**
+   - Press the "How to Play" button in-game for detailed rules
+   - Learn basic strategy and betting tips
+   - View win conditions and payout rates
 
-- Color-coded action buttons:
-  - Hit (Green)
-  - Stand (Red)
-  - Deal (Gold)
-  - Bet (Blue)
-- Visual feedback for available actions
-- Integrated chat system with game notifications
-- Real-time chip count and bet tracking
-- Responsive design for various screen sizes
+## 🛠 Technical Stack
 
-## Contributing
+### Backend
+- **Runtime**: `Node.js`
+- **Server**: `Express`
+- **Real-time Communication**: `Socket.IO`
+- **State Management**: Custom game state handler
 
-Feel free to submit issues and enhancement requests!
+### Frontend
+- **Core**: Vanilla JavaScript
+- **Styling**: CSS3 with custom animations
+- **Layout**: Responsive HTML5
+- **Real-time Updates**: Socket.IO client
 
-## License
+## 🔧 Development
 
-MIT License - see LICENSE file for details
+### Prerequisites
+- Node.js (v14 or higher)
+- npm (v6 or higher)
+
+### Environment Setup
+```bash
+# Create environment file
+cp .env.example .env
+
+# Install development dependencies
+npm install --include=dev
+```
+
+### Project Structure
+```
+├── server.js           # Main server file
+├── public/            
+│   ├── css/           # Stylesheets
+│   ├── js/            # Client-side JavaScript
+│   └── img/           # Game assets
+├── data/              # User data storage
+└── README.md          # This file
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+Made with ❤️ by Jonathan Stuart
+</div>
