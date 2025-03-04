@@ -11,6 +11,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 
 // Server setup
@@ -1032,10 +1033,13 @@ class BlackjackTable {
 }
 
 class Deck {
-    constructor() {
+    constructor(clientSeed = '') {
         this.cards = [];
         this.suits = ['♠', '♥', '♣', '♦'];
         this.values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        this.serverSeed = crypto.randomBytes(32).toString('hex');
+        this.clientSeed = clientSeed;
+        this.nonce = 0;
 
         for (const suit of this.suits) {
             for (const value of this.values) {
@@ -1044,17 +1048,45 @@ class Deck {
         }
 
         this.shuffle();
+        console.log('\x1b[32m%s\x1b[0m', `[PROVABLY FAIR] Server Seed: ${this.serverSeed}`);
+        console.log('\x1b[32m%s\x1b[0m', `[PROVABLY FAIR] Client Seed: ${this.clientSeed}`);
+    }
+
+    generateHash() {
+        const combinedSeed = `${this.serverSeed}:${this.clientSeed}:${this.nonce}`;
+        return crypto.createHash('sha256').update(combinedSeed).digest('hex');
     }
 
     shuffle() {
+        const hash = this.generateHash();
+        console.log('\x1b[36m%s\x1b[0m', `[PROVABLY FAIR] Round ${this.nonce} Hash: ${hash}`);
+        
+        // Fisher-Yates shuffle using the hash as entropy
         for (let i = this.cards.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const hashPart = hash.substring((i % 8) * 2, (i % 8) * 2 + 2);
+            const j = Math.floor(parseInt(hashPart, 16) / 256 * (i + 1));
             [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
         }
+        
+        this.nonce++;
+        return this.cards;
     }
 
     drawCard() {
+        if (this.cards.length === 0) {
+            console.log('\x1b[33m%s\x1b[0m', '[PROVABLY FAIR] Reshuffling deck...');
+            this.serverSeed = crypto.randomBytes(32).toString('hex');
+            this.shuffle();
+        }
         return this.cards.pop();
+    }
+
+    getVerificationData() {
+        return {
+            serverSeed: this.serverSeed,
+            clientSeed: this.clientSeed,
+            nonce: this.nonce - 1
+        };
     }
 }
 

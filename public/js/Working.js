@@ -23,6 +23,9 @@ class BlackjackGame {
         this.messageQueue = []; // Queue for handling message timing
         this.processingMessages = false; // Flag to track if we're processing messages
 
+        // Provably fair tracking
+        this.provablyFairData = null;
+
         // Connection monitoring
         this.lastPong = Date.now();
         this.connectionMonitoring = null;
@@ -211,6 +214,18 @@ class BlackjackGame {
         this.socket.on('playerTurn', (data) => {
             console.log('[Client] Player turn update:', data);
             this.handlePlayerTurn(data);
+        });
+
+        // Handle provably fair data
+        this.socket.on('provablyFairData', (data) => {
+            this.provablyFairData = data;
+            console.log('%c[PROVABLY FAIR] Received verification data:', 'color: #4CAF50; font-weight: bold');
+            console.log('%c Server Seed:', 'color: #2196F3', data.serverSeed);
+            console.log('%c Client Seed:', 'color: #2196F3', data.clientSeed);
+            console.log('%c Nonce:', 'color: #2196F3', data.nonce);
+            
+            // Display in chat or game log
+            this.displayMessage(`Provably Fair Round #${data.nonce + 1} started. Check console for verification data.`, 'system');
         });
     }
 
