@@ -127,6 +127,81 @@ const auth = {
 };
 
 /**
+ * Game Logic Utilities
+ */
+const GameUtils = {
+    getCardDescription(card) {
+        const valueNames = {
+            'A': 'Ace', 'K': 'King', 'Q': 'Queen', 'J': 'Jack',
+            '10': 'Ten', '9': 'Nine', '8': 'Eight', '7': 'Seven',
+            '6': 'Six', '5': 'Five', '4': 'Four', '3': 'Three', '2': 'Two'
+        };
+        
+        const suitNames = {
+            '♠': 'Spades', '♥': 'Hearts', '♣': 'Clubs', '♦': 'Diamonds'
+        };
+
+        return `${valueNames[card.value] || card.value} of ${suitNames[card.suit]}`;
+    },
+
+    calculateScore(cards) {
+        let score = 0;
+        let aces = 0;
+
+        for (const card of cards) {
+            if (card.value === 'A') {
+                aces++;
+            } else if (['K', 'Q', 'J'].includes(card.value)) {
+                score += 10;
+            } else {
+                score += parseInt(card.value);
+            }
+        }
+
+        // Add aces
+        for (let i = 0; i < aces; i++) {
+            if (score + 11 <= 21) {
+                score += 11;
+            } else {
+                score += 1;
+            }
+        }
+
+        return score;
+    },
+
+    hasBlackjack(cards) {
+        return cards.length === 2 && this.calculateScore(cards) === 21;
+    },
+
+    determineWinner(playerScore, dealerScore, playerBust, dealerBust) {
+        if (playerBust) return 'lose';
+        if (dealerBust) return 'win';
+        if (playerScore > dealerScore) return 'win';
+        if (playerScore < dealerScore) return 'lose';
+        return 'push';
+    },
+
+    generateResultMessage(username, result, playerScore, dealerScore, bet) {
+        const messages = {
+            win: {
+                bust: `🎉 ${username} wins! Dealer bust with ${dealerScore}. Won ${bet} chips.`,
+                score: `🎉 ${username} wins with ${playerScore} vs dealer's ${dealerScore}. Won ${bet} chips.`
+            },
+            lose: {
+                bust: `💥 ${username} busts with ${playerScore}! Lost ${bet} chips.`,
+                score: `😢 ${username} loses with ${playerScore} vs dealer's ${dealerScore}. Lost ${bet} chips.`
+            },
+            push: `🤝 ${username} pushes with ${playerScore}.`
+        };
+
+        if (result === 'win') return dealerScore > 21 ? messages.win.bust : messages.win.score;
+        if (result === 'lose') return playerScore > 21 ? messages.lose.bust : messages.lose.score;
+        return messages.push;
+    }
+};
+
+/**
  * Authentication Routes
  */
 app.post('/register', async (req, res) => {
@@ -275,11 +350,11 @@ class BlackjackTable {
     dealerPlay() {
         if (this.state !== 'dealer') return;
 
-        const dealerScore = this.calculateScore(this.dealer.cards);
+        const dealerScore = GameUtils.calculateScore(this.dealer.cards);
         if (dealerScore < 17) {
             const card = this.deck.drawCard();
             this.dealer.cards.push(card);
-            this.dealer.score = this.calculateScore(this.dealer.cards);
+            this.dealer.score = GameUtils.calculateScore(this.dealer.cards);
             
             // Broadcast state with next timer
             this.broadcastGameState();
@@ -340,13 +415,13 @@ class BlackjackTable {
             activePlayers.forEach(player => {
                 const card = this.deck.drawCard();
                 player.cards.push(card);
-                player.score = this.calculateScore(player.cards);
+                player.score = GameUtils.calculateScore(player.cards);
             });
 
             // Deal to dealer
             const dealerCard = this.deck.drawCard();
             this.dealer.cards.push(dealerCard);
-            this.dealer.score = this.calculateScore(this.dealer.cards);
+            this.dealer.score = GameUtils.calculateScore(this.dealer.cards);
         }
 
         // Set the first active player's turn
@@ -408,11 +483,11 @@ class BlackjackTable {
             case 'hit':
                 const card = this.deck.drawCard();
                 player.cards.push(card);
-                player.score = this.calculateScore(player.cards);
+                player.score = GameUtils.calculateScore(player.cards);
                 
                 this.io.to(this.id).emit('gameMessage', {
                     type: 'info',
-                    message: `🎯 ${player.username} hits and draws ${this.getCardDescription(card)}`
+                    message: `🎯 ${player.username} hits and draws ${GameUtils.getCardDescription(card)}`
                 });
 
                 if (player.score > 21) {
@@ -442,12 +517,12 @@ class BlackjackTable {
                     
                     const card = this.deck.drawCard();
                     player.cards.push(card);
-                    player.score = this.calculateScore(player.cards);
+                    player.score = GameUtils.calculateScore(player.cards);
                     player.finished = true;
 
                     this.io.to(this.id).emit('gameMessage', {
                         type: 'info',
-                        message: `💰 ${player.username} doubles down! Draws ${this.getCardDescription(card)}`
+                        message: `💰 ${player.username} doubles down! Draws ${GameUtils.getCardDescription(card)}`
                     });
 
                     if (player.score > 21) {
@@ -484,7 +559,7 @@ class BlackjackTable {
 
         while (checkedCount < activePlayers.length) {
             const candidatePlayer = activePlayers[nextPlayerIndex];
-            const score = this.calculateScore(candidatePlayer.cards);
+            const score = GameUtils.calculateScore(candidatePlayer.cards);
             
             if (score <= 21 && !candidatePlayer.finished) {
                 nextPlayer = candidatePlayer;
@@ -540,7 +615,7 @@ class BlackjackTable {
         // Reveal dealer's hole card
         this.io.to(this.id).emit('gameMessage', {
             type: 'dealer',
-            message: `🎲 Dealer reveals hidden card: ${this.getCardDescription(this.dealer.cards[1])}`
+            message: `🎲 Dealer reveals hidden card: ${GameUtils.getCardDescription(this.dealer.cards[1])}`
         });
 
         // Start the dealer's play sequence
@@ -552,7 +627,7 @@ class BlackjackTable {
         
         // Reset dealer state
         this.state = 'dealer';
-        const initialScore = this.calculateScore(this.dealer.cards);
+        const initialScore = GameUtils.calculateScore(this.dealer.cards);
         console.log('[Dealer] Initial score:', initialScore);
         
         // Emit initial dealer turn event to reveal cards
@@ -566,158 +641,32 @@ class BlackjackTable {
         setTimeout(() => this.dealerPlaySequence(), 1000);
     }
 
-    dealerPlaySequence() {
-        const dealerScore = this.calculateScore(this.dealer.cards);
-        console.log('[Dealer] Current score:', dealerScore);
-
-        // Emit initial dealer score
-        this.io.to(this.id).emit('dealerTurn', {
-            dealerHand: this.dealer.cards,
-            message: `Dealer reveals their hand... Current score: ${dealerScore}`,
-            debug: `Starting dealer sequence with score ${dealerScore}`
-        });
-
-        // If dealer has blackjack, end immediately
-        if (dealerScore === 21 && this.dealer.cards.length === 2) {
-            setTimeout(() => {
-                this.io.to(this.id).emit('dealerStand', {
-                    message: "Dealer has Blackjack!",
-                    debug: "Dealer has natural blackjack"
-                });
-                this.endRound();
-            }, this.dealerDelay * 1000);
-            return;
-        }
-
-        // Schedule next dealer action
-        setTimeout(() => this.dealerDrawOrStand(), this.dealerDelay * 1000);
-    }
-
-    dealerDrawOrStand() {
-        const dealerScore = this.calculateScore(this.dealer.cards);
-        
-        // Dealer must draw on 16 or less, stand on 17 or more
-        if (dealerScore < 17) {
-            const newCard = this.deck.drawCard();
-            this.dealer.cards.push(newCard);
-            const newScore = this.calculateScore(this.dealer.cards);
-            const willDrawAgain = newScore < 17;
-            
-            // Determine appropriate message based on the new card and score
-            let message;
-            if (newScore > 21) {
-                message = `Dealer draws ${this.getCardDescription(newCard)}... Bust with ${newScore}!`;
-            } else if (willDrawAgain) {
-                message = `Dealer draws ${this.getCardDescription(newCard)}... Must draw again at ${newScore}.`;
-            } else {
-                message = `Dealer draws ${this.getCardDescription(newCard)}... Stands at ${newScore}.`;
-            }
-
-            this.io.to(this.id).emit('dealerCard', {
-                card: newCard,
-                dealerHand: this.dealer.cards,
-                willDrawAgain,
-                message,
-                debug: `Drew card, new score: ${newScore}`
-            });
-
-            if (newScore > 21) {
-                // Dealer busts
-                setTimeout(() => {
-                    this.io.to(this.id).emit('dealerStand', {
-                        message: "Dealer busts! All remaining players win.",
-                        debug: "Dealer busted"
-                    });
-                    this.endRound();
-                }, this.dealerDelay * 1000);
-            } else if (willDrawAgain) {
-                // Schedule next draw
-                setTimeout(() => this.dealerDrawOrStand(), this.dealerDelay * 1000);
-            } else {
-                // Dealer stands
-                setTimeout(() => {
-                    this.io.to(this.id).emit('dealerStand', {
-                        message: `Dealer stands at ${newScore}.`,
-                        debug: "Dealer stands"
-                    });
-                    this.endRound();
-                }, this.dealerDelay * 1000);
-            }
-        } else {
-            // Dealer stands
-            this.io.to(this.id).emit('dealerStand', {
-                message: `Dealer stands at ${dealerScore}.`,
-                debug: "Dealer stands"
-            });
-            this.endRound();
-        }
-    }
-
     getCardDescription(card) {
-        const valueNames = {
-            'A': 'Ace',
-            'K': 'King',
-            'Q': 'Queen',
-            'J': 'Jack',
-            '10': 'Ten',
-            '9': 'Nine',
-            '8': 'Eight',
-            '7': 'Seven',
-            '6': 'Six',
-            '5': 'Five',
-            '4': 'Four',
-            '3': 'Three',
-            '2': 'Two'
-        };
-        
-        const suitNames = {
-            '♠': 'Spades',
-            '♥': 'Hearts',
-            '♣': 'Clubs',
-            '♦': 'Diamonds'
-        };
-
-        return `${valueNames[card.value] || card.value} of ${suitNames[card.suit]}`;
+        return GameUtils.getCardDescription(card);
     }
 
-    endRound() {
-        console.log('[Dealer] Ending round');
-        
-        // Allow deck to be revealed now that round is over
-        if (this.deck) {
-            this.deck.setCanRevealDeck(true);
-        }
-        
-        // Calculate results and update chips
-        const dealerScore = this.calculateScore(this.dealer.cards);
+    determineWinners() {
+        const dealerScore = GameUtils.calculateScore(this.dealer.cards);
         const dealerBust = dealerScore > 21;
         
         this.players.forEach(player => {
             if (player.bet > 0) {
-                const playerScore = this.calculateScore(player.cards);
+                const playerScore = GameUtils.calculateScore(player.cards);
                 const playerBust = playerScore > 21;
                 
-                // Determine winner
-                let result;
-                let message;
-                
-                if (playerBust) {
-                    result = 'lose';
-                    message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.bet} chips.`;
-                } else if (dealerBust) {
-                    result = 'win';
-                    message = `🎉 ${player.username} wins! Dealer bust with ${dealerScore}. Won ${player.bet} chips.`;
+                const result = GameUtils.determineWinner(playerScore, dealerScore, playerBust, dealerBust);
+                const message = GameUtils.generateResultMessage(
+                    player.username, 
+                    result, 
+                    playerScore, 
+                    dealerScore, 
+                    player.bet
+                );
+
+                // Update chips based on result
+                if (result === 'win') {
                     player.chips += player.bet * 2; // Return bet + winnings
-                } else if (playerScore > dealerScore) {
-                    result = 'win';
-                    message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}. Won ${player.bet} chips.`;
-                    player.chips += player.bet * 2; // Return bet + winnings
-                } else if (playerScore < dealerScore) {
-                    result = 'lose';
-                    message = `😢 ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}. Lost ${player.bet} chips.`;
-                } else {
-                    result = 'push';
-                    message = `🤝 ${player.username} pushes with ${playerScore}.`;
+                } else if (result === 'push') {
                     player.chips += player.bet; // Return bet on push
                 }
                 
@@ -732,110 +681,129 @@ class BlackjackTable {
             }
         });
 
+        return this.players.map(p => ({ 
+            username: p.username, 
+            result: p.result, 
+            chips: p.chips 
+        }));
+    }
+
+    endRound() {
+        console.log('[Dealer] Ending round');
+        
+        // Allow deck to be revealed now that round is over
+        if (this.deck) {
+            this.deck.setCanRevealDeck(true);
+        }
+        
+        // Calculate results and update chips
+        this.determineWinners();
+
         // Broadcast final state
         this.broadcastGameState();
 
         // Wait a moment before resetting for next round
-        setTimeout(() => {
-            // Reset game state for next round
-            this.state = 'betting';
-            this.currentTurn = null;
-            this.dealer = {
-                cards: [],
-                score: 0
-            };
-
-            // Reset player states but keep their chips
-            this.players.forEach(player => {
-                player.cards = [];
-                player.score = 0;
-                player.bet = 0;
-                player.finished = false;
-                player.insuranceBet = 0;
-                player.result = null;
-                player.canDoubleDown = false;
-            });
-
-            // Clear any pending dealer timer
-            if (this.dealerTimer) {
-                clearTimeout(this.dealerTimer);
-                this.dealerTimer = null;
-            }
-
-            // Broadcast the reset state
-            this.broadcastGameState();
-            
-            // Prompt for new bets
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'info',
-                message: '🎲 New round! Place your bets!'
-            });
-        }, 3000); // Wait 3 seconds before starting new round
+        setTimeout(() => this.resetRound(), 3000);
     }
 
-    dealerPlay() {
+    resetRound() {
+        // Reset game state
+        this.state = 'betting';
+        this.currentTurn = null;
+        this.dealer = { cards: [], score: 0 };
+
+        // Reset player states but keep their chips
+        this.players.forEach(player => {
+            Object.assign(player, {
+                cards: [],
+                score: 0,
+                bet: 0,
+                finished: false,
+                insuranceBet: 0,
+                result: null,
+                canDoubleDown: false
+            });
+        });
+
+        // Clear any pending dealer timer
+        if (this.dealerTimer) {
+            clearTimeout(this.dealerTimer);
+            this.dealerTimer = null;
+        }
+
+        // Broadcast the reset state
+        this.broadcastGameState();
+        
+        // Prompt for new bets
+        this.io.to(this.id).emit('gameMessage', {
+            type: 'info',
+            message: '🎲 New round! Place your bets!'
+        });
+    }
+
+    async dealerPlaySequence() {
         if (this.state !== 'dealer') return;
 
-        const dealerScore = this.calculateScore(this.dealer.cards);
+        const dealerScore = GameUtils.calculateScore(this.dealer.cards);
+        
         if (dealerScore < 17) {
             const card = this.deck.drawCard();
             this.dealer.cards.push(card);
-            this.dealer.score = this.calculateScore(this.dealer.cards);
-            
-            // Broadcast new state
-            this.broadcastGameState();
-            
-            // Send dealer action message
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: `🎲 Dealer draws ${this.getCardDescription(card)}`
-            });
-            
-            // Continue dealer play after delay
-            this.startDealerTimer();
-        } else {
-            // Send dealer final score message
-            const finalScore = this.calculateScore(this.dealer.cards);
-            if (finalScore > 21) {
-                this.io.to(this.id).emit('gameMessage', {
-                    type: 'dealer',
-                    message: `💥 Dealer busts with ${finalScore}!`
-                });
+            const newScore = GameUtils.calculateScore(this.dealer.cards);
+            const willDrawAgain = newScore < 17;
+
+            // Determine message based on the new card and score
+            let message;
+            if (newScore > 21) {
+                message = `Dealer draws ${GameUtils.getCardDescription(card)}... Bust with ${newScore}!`;
+            } else if (willDrawAgain) {
+                message = `Dealer draws ${GameUtils.getCardDescription(card)}... Must draw again at ${newScore}.`;
             } else {
-                this.io.to(this.id).emit('gameMessage', {
-                    type: 'dealer',
-                    message: `✋ Dealer stands with ${finalScore}`
-                });
+                message = `Dealer draws ${GameUtils.getCardDescription(card)}... Stands at ${newScore}.`;
             }
-            
-            // End the round after a short delay
-            setTimeout(() => this.endRound(), 1000);
+
+            // Emit dealer action
+            this.io.to(this.id).emit('dealerCard', {
+                card,
+                dealerHand: this.dealer.cards,
+                willDrawAgain,
+                message,
+                debug: `Drew card, new score: ${newScore}`
+            });
+
+            // Schedule next action
+            await new Promise(resolve => setTimeout(resolve, this.dealerDelay * 1000));
+
+            if (newScore > 21) {
+                this.io.to(this.id).emit('dealerStand', {
+                    message: "Dealer busts! All remaining players win.",
+                    debug: "Dealer busted"
+                });
+                this.endRound();
+            } else if (willDrawAgain) {
+                this.dealerPlaySequence();
+            } else {
+                this.io.to(this.id).emit('dealerStand', {
+                    message: `Dealer stands at ${newScore}.`,
+                    debug: "Dealer stands"
+                });
+                this.endRound();
+            }
+        } else {
+            this.io.to(this.id).emit('dealerStand', {
+                message: `Dealer stands at ${dealerScore}.`,
+                debug: "Dealer stands"
+            });
+            this.endRound();
         }
     }
 
     calculateScore(cards) {
-        let score = 0;
-        let aces = 0;
+        return GameUtils.calculateScore(cards);
+    }
 
-        for (const card of cards) {
-            if (card.value === 'A') {
-                aces++;
-            } else if (['K', 'Q', 'J'].includes(card.value)) {
-                score += 10;
-            } else {
-                score += parseInt(card.value);
-            }
-        }
-
-        for (let i = 0; i < aces; i++) {
-            if (score + 11 <= 21) {
-                score += 11;
-            } else {
-                score += 1;
-            }
-        }
-
-        return score;
+    hasBlackjack(cards) {
+        return GameUtils.hasBlackjack(cards);
     }
 
     getGameState() {
@@ -843,12 +811,12 @@ class BlackjackTable {
             state: this.state,
             dealer: {
                 cards: this.dealer.cards,
-                score: this.calculateScore(this.dealer.cards)
+                score: GameUtils.calculateScore(this.dealer.cards)
             },
             players: this.players.map(player => ({
                 username: player.username,
                 cards: player.cards,
-                score: this.calculateScore(player.cards),
+                score: GameUtils.calculateScore(player.cards),
                 bet: player.bet,
                 chips: player.chips,
                 status: player.status,
@@ -880,13 +848,13 @@ class BlackjackTable {
         // Calculate scores and set initial states
         for (const player of this.players) {
             if (player.bet > 0) {
-                player.score = this.calculateScore(player.cards);
+                player.score = GameUtils.calculateScore(player.cards);
                 player.status = 'playing';
                 player.canDoubleDown = player.chips >= player.bet && player.cards.length === 2;
             }
         }
         
-        this.dealer.score = this.calculateScore(this.dealer.cards);
+        this.dealer.score = GameUtils.calculateScore(this.dealer.cards);
         this.state = 'playing';
         
         // Set initial player turn
@@ -902,97 +870,9 @@ class BlackjackTable {
         this.io.to(this.id).emit('gameStateUpdate', this.getGameState());
     }
 
-    determineWinners() {
-        const dealerScore = this.calculateScore(this.dealer.cards);
-        const dealerHasBlackjack = this.hasBlackjack(this.dealer.cards);
-        
-        for (const player of this.players) {
-            if (!player.cards || player.cards.length === 0) continue;
-            
-            const playerScore = this.calculateScore(player.cards);
-            const playerHasBlackjack = this.hasBlackjack(player.cards);
-            let message = '';
-            
-            // Determine outcome
-            if (playerScore > 21) {
-                player.chips -= player.bet;
-                message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.bet} chips.`;
-            } else if (dealerScore > 21) {
-                player.chips += player.bet;
-                message = `🎉 ${player.username} wins with ${playerScore}! Dealer busted at ${dealerScore}. Won ${player.bet} chips.`;
-            } else if (playerHasBlackjack && !dealerHasBlackjack) {
-                const blackjackPayout = Math.floor(player.bet * 1.5);
-                player.chips += blackjackPayout;
-                message = `🎰 Blackjack! ${player.username} wins ${blackjackPayout} chips.`;
-            } else if (!playerHasBlackjack && dealerHasBlackjack) {
-                player.chips -= player.bet;
-                message = `❌ Dealer Blackjack! ${player.username} loses ${player.bet} chips.`;
-            } else if (playerScore > dealerScore) {
-                player.chips += player.bet;
-                message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}! Won ${player.bet} chips.`;
-            } else if (playerScore < dealerScore) {
-                player.chips -= player.bet;
-                message = `❌ ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}. Lost ${player.bet} chips.`;
-            } else {
-                message = `🤝 Push! ${player.username} ties with ${playerScore}.`;
-            }
-            
-            // Handle insurance payout if applicable
-            if (player.insuranceBet > 0) {
-                if (dealerHasBlackjack) {
-                    const insurancePayout = player.insuranceBet * 2;
-                    player.chips += insurancePayout;
-                    message += `\n💰 Insurance pays ${insurancePayout} chips!`;
-                } else {
-                    message += `\n📉 Insurance lost: ${player.insuranceBet} chips`;
-                }
-            }
-            
-            // Emit the result
-            this.io.to(this.id).emit('gameMessage', {
-                type: playerScore > dealerScore ? 'success' : playerScore < dealerScore ? 'error' : 'info',
-                message: message
-            });
-            
-            // Reset bets
-            player.bet = 0;
-            player.insuranceBet = 0;
-            
-            // Update player's chips
-            this.io.to(player.socketId).emit('updateChips', player.chips);
-        }
-    }
-
-    hasBlackjack(hand) {
-        return this.calculateScore(hand) === 21 && hand.length === 2;
-    }
-
-    resetRound() {
-        // Reset game state
-        this.state = 'betting';
-        this.currentTurn = null;
-        this.dealer.cards = [];
-        
-        // Reset all players
-        this.players.forEach(player => {
-            player.cards = [];
-            player.bet = 0;
-            player.insuranceBet = 0;
-        });
-
-        // Notify clients to reset for new round
-        this.io.to(this.id).emit('gameMessage', {
-            type: 'info',
-            message: '🎲 Ready for new round! Place your bets.'
-        });
-
-        // Broadcast the reset state
-        this.broadcastGameState();
-    }
-
     async determineWinners() {
-        const dealerScore = this.calculateScore(this.dealer.cards);
-        const dealerHasBlackjack = this.hasBlackjack(this.dealer.cards);
+        const dealerScore = GameUtils.calculateScore(this.dealer.cards);
+        const dealerHasBlackjack = GameUtils.hasBlackjack(this.dealer.cards);
         
         // Add a small delay before showing results
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1000,8 +880,8 @@ class BlackjackTable {
         for (const player of this.players) {
             if (!player.cards || player.cards.length === 0) continue;
             
-            const playerScore = this.calculateScore(player.cards);
-            const playerHasBlackjack = this.hasBlackjack(player.cards);
+            const playerScore = GameUtils.calculateScore(player.cards);
+            const playerHasBlackjack = GameUtils.hasBlackjack(player.cards);
             let message = '';
             let type = 'info';
             
