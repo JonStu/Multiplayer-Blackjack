@@ -11,6 +11,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 
 // Server setup
@@ -40,6 +41,40 @@ app.use(express.static('public'));
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-key';
 const PORT = process.env.PORT || 3000;
+
+/**
+ * Provably Fair System
+ */
+const ProvablyFair = {
+    generateServerSeed() {
+        return crypto.randomBytes(32).toString('hex');
+    },
+
+    generateHash(serverSeed, clientSeed) {
+        return crypto.createHmac('sha256', serverSeed)
+            .update(clientSeed)
+            .digest('hex');
+    },
+
+    provablyFairShuffle(array, hash) {
+        const result = [...array];
+        let hashIndex = 0;
+        
+        for (let i = result.length - 1; i > 0; i--) {
+            // Use 4 characters from hash for more randomness
+            const hexSlice = hash.slice(hashIndex, hashIndex + 4);
+            const randomValue = parseInt(hexSlice, 16);
+            const j = randomValue % (i + 1);
+            
+            [result[i], result[j]] = [result[j], result[i]];
+            
+            // Move hash index by 4 and wrap around
+            hashIndex = (hashIndex + 4) % (hash.length - 3);
+        }
+        
+        return result;
+    }
+};
 
 /**
  * File System Operations
@@ -172,7 +207,7 @@ class BlackjackTable {
     constructor(id) {
         this.id = id;
         this.players = [];
-        this.deck = new Deck();
+        this.deck = null;
         this.dealer = {
             cards: [],
             score: 0
@@ -180,7 +215,7 @@ class BlackjackTable {
         this.state = 'betting';
         this.currentTurn = null;
         this.dealerTimer = null;
-        this.dealerDelay = 3; // seconds between dealer cards
+        this.dealerDelay = 3;
         this.maxPlayers = 5;
         this.io = io;
     }
@@ -199,7 +234,8 @@ class BlackjackTable {
             status: 'active',
             insurance: 0,
             lastBet: 0,
-            canDoubleDown: false
+            canDoubleDown: false,
+            finished: false
         });
         return true;
     }
@@ -241,7 +277,8 @@ class BlackjackTable {
 
         const dealerScore = this.calculateScore(this.dealer.cards);
         if (dealerScore < 17) {
-            this.dealer.cards.push(this.deck.drawCard());
+            const card = this.deck.drawCard();
+            this.dealer.cards.push(card);
             this.dealer.score = this.calculateScore(this.dealer.cards);
             
             // Broadcast state with next timer
@@ -255,6 +292,14 @@ class BlackjackTable {
     }
 
     startNewRound() {
+        // Check if any players have placed bets
+        const playersWithBets = this.players.filter(player => player.bet > 0);
+        if (playersWithBets.length === 0) {
+            console.log('[Server] Cannot start round: no players have placed bets');
+            return false;
+        }
+
+        // Reset game state
         this.state = 'betting';
         this.currentTurn = null;
         this.dealer = {
@@ -262,42 +307,72 @@ class BlackjackTable {
             score: 0
         };
         
-        // Reset player states but keep their chips
+        // Reset player states for those who haven't bet
         this.players.forEach(player => {
-            player.cards = [];
-            player.score = 0;
-            player.bet = 0;
-            player.insurance = 0;
-            player.status = 'betting';
-            player.canDoubleDown = false;
+            if (player.bet === 0) {
+                player.cards = [];
+                player.score = 0;
+                player.finished = false;
+                player.insuranceBet = 0;
+                player.result = null;
+            }
         });
+
+        // Create new deck with fresh seeds
+        const clientSeed = crypto.randomBytes(32).toString('hex');
+        const serverSeed = crypto.randomBytes(32).toString('hex');
+        this.deck = new Deck(serverSeed, clientSeed);
+        
+        // Broadcast verification data to all players
+        this.io.to(this.id).emit('verificationData', this.deck.getVerificationData());
+        
+        // Only deal cards if we have players with bets
+        if (playersWithBets.length > 0) {
+            this.dealInitialCards();
+            this.state = 'playing';
+            this.broadcastGameState();
+            return true;
+        }
+        return false;
     }
 
     dealInitialCards() {
-        // Reset deck and shuffle
-        this.deck = new Deck();
-        this.deck.shuffle();
+        // Verify we have players with bets before dealing
+        const activePlayers = this.players.filter(player => player.bet > 0);
+        if (activePlayers.length === 0) {
+            console.log('[Server] No players with bets to deal cards to');
+            return false;
+        }
 
-        // Deal two cards to each player
+        // Deal two cards to each player who has placed a bet
         for (let i = 0; i < 2; i++) {
-            for (const player of this.getPlayersInTurnOrder()) {
-                player.cards.push(this.deck.drawCard());
+            activePlayers.forEach(player => {
+                const card = this.deck.drawCard();
+                player.cards.push(card);
                 player.score = this.calculateScore(player.cards);
-            }
-            // Deal to dealer last
-            this.dealer.cards.push(this.deck.drawCard());
+            });
+
+            // Deal to dealer
+            const dealerCard = this.deck.drawCard();
+            this.dealer.cards.push(dealerCard);
             this.dealer.score = this.calculateScore(this.dealer.cards);
         }
 
-        this.state = 'playing';
-        // Set first player's turn (alphabetical order)
-        this.currentTurn = this.getPlayersInTurnOrder()[0].username;
-        this.broadcastGameState();
+        // Set the first active player's turn
+        const playersInOrder = this.getPlayersInTurnOrder();
+        if (playersInOrder.length > 0) {
+            this.currentTurn = playersInOrder[0].username;
+        } else {
+            console.log('[Server] No active players to set turn');
+            return false;
+        }
+
+        return true;
     }
 
     getPlayersInTurnOrder() {
-        // Only return players who have placed bets and are in the game
-        return this.players.filter(p => p.bet > 0 && (p.status === 'playing' || p.status === 'stand' || p.status === 'bust'));
+        // Only include players who have placed bets
+        return this.players.filter(player => player.bet > 0);
     }
 
     placeBet(socketId, amount) {
@@ -326,178 +401,105 @@ class BlackjackTable {
     }
 
     handlePlayerAction(socket, action) {
-        const player = this.players[socket.id];
-        if (!player) return;
+        const player = this.players.find(p => p.socketId === socket.id);
+        if (!player) return false;
+        
+        // Verify it's the player's turn
+        if (this.currentTurn !== player.username) {
+            socket.emit('gameMessage', {
+                type: 'error',
+                message: '❌ Not your turn!'
+            });
+            return false;
+        }
 
         switch (action) {
             case 'hit':
                 const card = this.deck.drawCard();
                 player.cards.push(card);
-                const score = this.calculateScore(player.cards);
+                player.score = this.calculateScore(player.cards);
                 
-                // Send hit message to all players
-                this.broadcastGameState();
                 this.io.to(this.id).emit('gameMessage', {
                     type: 'info',
                     message: `🎯 ${player.username} hits and draws ${this.getCardDescription(card)}`
                 });
 
-                if (score > 21) {
+                if (player.score > 21) {
+                    player.finished = true;
                     this.io.to(this.id).emit('gameMessage', {
                         type: 'error',
-                        message: `💥 ${player.username} busts with ${score}!`
+                        message: `💥 ${player.username} busts with ${player.score}!`
                     });
                     this.nextTurn();
                 }
                 break;
 
             case 'stand':
+                player.finished = true;
                 this.io.to(this.id).emit('gameMessage', {
                     type: 'info',
-                    message: `✋ ${player.username} stands with ${this.calculateScore(player.cards)}`
+                    message: `✋ ${player.username} stands with ${player.score}`
                 });
                 this.nextTurn();
                 break;
 
             case 'doubleDown':
-                if (player.chips >= player.bet) {
+                if (player.chips >= player.bet && player.cards.length === 2) {
                     const additionalBet = player.bet;
                     player.chips -= additionalBet;
                     player.bet += additionalBet;
                     
                     const card = this.deck.drawCard();
                     player.cards.push(card);
-                    const score = this.calculateScore(player.cards);
+                    player.score = this.calculateScore(player.cards);
+                    player.finished = true;
 
-                    this.broadcastGameState();
                     this.io.to(this.id).emit('gameMessage', {
                         type: 'info',
                         message: `💰 ${player.username} doubles down! Draws ${this.getCardDescription(card)}`
                     });
 
-                    if (score > 21) {
+                    if (player.score > 21) {
                         this.io.to(this.id).emit('gameMessage', {
                             type: 'error',
-                            message: `💥 ${player.username} busts with ${score}!`
+                            message: `💥 ${player.username} busts with ${player.score}!`
                         });
                     }
                     this.nextTurn();
                 }
                 break;
         }
-    }
 
-    async handleDealerTurn() {
-        // Only send initial dealer card message once
-        this.io.to(this.id).emit('gameMessage', {
-            type: 'dealer',
-            message: `🎲 Dealer reveals hidden card: ${this.getCardDescription(this.dealer.cards[1])}`
-        });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const dealerScore = this.calculateScore(this.dealer.cards);
-        if (dealerScore === 21 && this.dealer.cards.length === 2) {
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: `🎰 Dealer has Blackjack!`
-            });
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await this.determineWinners();
-            this.resetRound();
-            return;
-        }
-
-        // Draw cards if needed
-        while (this.calculateScore(this.dealer.cards) < 17) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const card = this.deck.drawCard();
-            this.dealer.cards.push(card);
-            
-            this.broadcastGameState();
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: `🎲 Dealer draws ${this.getCardDescription(card)}`
-            });
-        }
-
-        // Send final dealer status
-        const finalScore = this.calculateScore(this.dealer.cards);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        if (finalScore > 21) {
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: `💥 Dealer busts with ${finalScore}!`
-            });
-        } else {
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: `✋ Dealer stands with ${finalScore}`
-            });
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await this.determineWinners();
-        this.resetRound();
+        this.broadcastGameState();
+        return true;
     }
 
     nextTurn() {
-        // Find all active players
-        const activePlayers = this.players.filter(p => p.cards.length > 0);
-        if (activePlayers.length === 0) return;
+        // Find all active players with bets
+        const activePlayers = this.players.filter(p => p.bet > 0 && !p.finished);
+        if (activePlayers.length === 0) {
+            console.log('[Server] No active players left, moving to dealer turn');
+            this.startDealerTurn();
+            return;
+        }
 
         // Find current player index
         const currentPlayerIndex = activePlayers.findIndex(p => p.username === this.currentTurn);
         
-        // Check if there are any unfinished players who haven't busted
-        const unfinishedPlayers = activePlayers.filter(p => {
-            const score = this.calculateScore(p.cards);
-            return score <= 21 && (this.currentTurn === null || p.username !== this.currentTurn);
-        });
-
-        console.log('[Server] Turn transition:', {
-            currentTurn: this.currentTurn,
-            currentPlayerIndex,
-            unfinishedCount: unfinishedPlayers.length,
-            activePlayers: activePlayers.map(p => p.username)
-        });
-
-        // If no unfinished players or we've reached the end, move to dealer's turn
-        if (unfinishedPlayers.length === 0 || 
-            (currentPlayerIndex !== -1 && currentPlayerIndex === activePlayers.length - 1)) {
-            console.log('[Server] Moving to dealer turn');
-            this.state = 'dealer';
-            this.currentTurn = null;
-            
-            // Notify all players that dealer turn is starting
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: '🎲 Dealer\'s turn beginning...'
-            });
-            
-            // Start dealer turn after a short delay
-            setTimeout(() => this.handleDealerTurn(), 1000);
-            return;
-        }
-
-        // Find next player who hasn't busted
-        let nextPlayerIndex;
-        if (currentPlayerIndex === -1) {
-            nextPlayerIndex = 0; // Start with first player
-        } else {
-            nextPlayerIndex = (currentPlayerIndex + 1) % activePlayers.length;
-        }
-
-        // Find next valid player who hasn't busted
+        // Find next unfinished player
+        let nextPlayerIndex = currentPlayerIndex === -1 ? 0 : (currentPlayerIndex + 1) % activePlayers.length;
         let nextPlayer = null;
         let checkedCount = 0;
+
         while (checkedCount < activePlayers.length) {
             const candidatePlayer = activePlayers[nextPlayerIndex];
             const score = this.calculateScore(candidatePlayer.cards);
-            if (score <= 21) {
+            
+            if (score <= 21 && !candidatePlayer.finished) {
                 nextPlayer = candidatePlayer;
                 break;
             }
+            
             nextPlayerIndex = (nextPlayerIndex + 1) % activePlayers.length;
             checkedCount++;
         }
@@ -508,98 +510,50 @@ class BlackjackTable {
             console.log('[Server] Next turn:', nextPlayer.username);
             
             // Notify all players about whose turn it is
-            this.players.forEach(player => {
-                this.io.to(player.socketId).emit('playerTurn', {
-                    currentPlayer: nextPlayer.username,
-                    isYourTurn: player.socketId === nextPlayer.socketId
-                });
+            this.io.to(this.id).emit('playerTurn', {
+                currentPlayer: nextPlayer.username,
+                isYourTurn: nextPlayer.socketId === this.currentTurn
             });
+            
+            // Enable double down if eligible
+            if (nextPlayer.cards.length === 2 && nextPlayer.chips >= nextPlayer.bet) {
+                nextPlayer.canDoubleDown = true;
+            }
         } else {
             // If no valid players found, move to dealer turn
-            console.log('[Server] No valid players, moving to dealer turn');
-            this.state = 'dealer';
-            this.currentTurn = null;
-            
-            this.io.to(this.id).emit('gameMessage', {
-                type: 'dealer',
-                message: '🎲 Dealer\'s turn beginning...'
-            });
-            
-            setTimeout(() => this.handleDealerTurn(), 1000);
+            console.log('[Server] No valid players left, moving to dealer turn');
+            this.startDealerTurn();
         }
 
         // Broadcast updated game state
         this.broadcastGameState();
     }
 
-    handlePlayerAction(socket, action) {
-        const player = this.players.find(p => p.socketId === socket.id);
-        if (!player) return false;
+    startDealerTurn() {
+        this.state = 'dealer';
+        this.currentTurn = null;
         
-        // Verify it's the player's turn
-        if (player.username !== this.currentTurn) {
-            console.log(`[Server] Wrong turn. Current: ${this.currentTurn}, Attempted: ${player.username}`);
-            return false;
-        }
+        // Notify all players that dealer turn is starting
+        this.io.to(this.id).emit('gameMessage', {
+            type: 'dealer',
+            message: '🎲 Dealer\'s turn beginning...'
+        });
+        
+        // Start dealer turn after a short delay
+        setTimeout(() => this.handleDealerTurn(), 1000);
+    }
 
-        switch (action) {
-            case 'hit':
-                const card = this.deck.drawCard();
-                player.cards.push(card);
-                const score = this.calculateScore(player.cards);
-                
-                // Send hit message to all players
-                this.broadcastGameState();
-                this.io.to(this.id).emit('gameMessage', {
-                    type: 'info',
-                    message: `🎯 ${player.username} hits and draws ${this.getCardDescription(card)}`
-                });
+    handleDealerTurn() {
+        if (this.state !== 'dealer') return;
 
-                if (score > 21) {
-                    this.io.to(this.id).emit('gameMessage', {
-                        type: 'error',
-                        message: `💥 ${player.username} busts with ${score}!`
-                    });
-                    this.nextTurn();
-                }
-                return true;
+        // Reveal dealer's hole card
+        this.io.to(this.id).emit('gameMessage', {
+            type: 'dealer',
+            message: `🎲 Dealer reveals hidden card: ${this.getCardDescription(this.dealer.cards[1])}`
+        });
 
-            case 'stand':
-                this.io.to(this.id).emit('gameMessage', {
-                    type: 'info',
-                    message: `✋ ${player.username} stands with ${this.calculateScore(player.cards)}`
-                });
-                this.nextTurn();
-                return true;
-
-            case 'doubleDown':
-                if (player.chips >= player.bet) {
-                    const additionalBet = player.bet;
-                    player.chips -= additionalBet;
-                    player.bet += additionalBet;
-                    
-                    const card = this.deck.drawCard();
-                    player.cards.push(card);
-                    const score = this.calculateScore(player.cards);
-
-                    this.broadcastGameState();
-                    this.io.to(this.id).emit('gameMessage', {
-                        type: 'info',
-                        message: `💰 ${player.username} doubles down! Draws ${this.getCardDescription(card)}`
-                    });
-
-                    if (score > 21) {
-                        this.io.to(this.id).emit('gameMessage', {
-                            type: 'error',
-                            message: `💥 ${player.username} busts with ${score}!`
-                        });
-                    }
-                    this.nextTurn();
-                    return true;
-                }
-                return false;
-        }
-        return false;
+        // Start the dealer's play sequence
+        this.startDealerTimer();
     }
 
     playDealerTurn() {
@@ -736,55 +690,131 @@ class BlackjackTable {
     }
 
     endRound() {
-        if (this.state !== 'dealer') {
-            console.log('[Dealer] Ignoring endRound call - not in dealer state');
-            return;
-        }
-        
         console.log('[Dealer] Ending round');
-        this.state = 'roundEnd';
         
+        // Calculate results and update chips
         const dealerScore = this.calculateScore(this.dealer.cards);
-        const winners = [];
-        const losers = [];
+        const dealerBust = dealerScore > 21;
         
-        // Calculate winners and losers
-        for (const player of this.players) {
-            if (player.bet === 0) continue;
-            
-            const playerScore = this.calculateScore(player.cards);
-            let winAmount = 0;
-            
-            if (player.status === 'bust') {
-                losers.push(player.username);
-            } else if (dealerScore > 21 || playerScore > dealerScore) {
-                winners.push(player.username);
-                winAmount = player.bet * 2;
-            } else if (playerScore === dealerScore) {
-                winAmount = player.bet; // Push - return original bet
-            } else {
-                losers.push(player.username);
+        this.players.forEach(player => {
+            if (player.bet > 0) {
+                const playerScore = this.calculateScore(player.cards);
+                const playerBust = playerScore > 21;
+                
+                // Determine winner
+                let result;
+                let message;
+                
+                if (playerBust) {
+                    result = 'lose';
+                    message = `💥 ${player.username} loses with bust (${playerScore})`;
+                } else if (dealerBust) {
+                    result = 'win';
+                    message = `🎉 ${player.username} wins! Dealer bust with ${dealerScore}`;
+                    player.chips += player.bet * 2; // Return bet + winnings
+                } else if (playerScore > dealerScore) {
+                    result = 'win';
+                    message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}`;
+                    player.chips += player.bet * 2; // Return bet + winnings
+                } else if (playerScore < dealerScore) {
+                    result = 'lose';
+                    message = `😢 ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}`;
+                } else {
+                    result = 'push';
+                    message = `🤝 ${player.username} pushes with ${playerScore}`;
+                    player.chips += player.bet; // Return bet on push
+                }
+                
+                // Send result message
+                this.io.to(this.id).emit('gameMessage', {
+                    type: result === 'win' ? 'success' : result === 'push' ? 'info' : 'error',
+                    message: message
+                });
+                
+                // Store result for UI
+                player.result = result;
             }
-            
-            player.chips += winAmount;
-        }
-
-        // Emit round end event
-        this.io.to(this.id).emit('roundEnd', {
-            dealerHand: this.dealer.cards,
-            dealerScore: dealerScore,
-            players: this.players,
-            winners,
-            losers
         });
 
-        // Start new round after delay
+        // Broadcast final state
+        this.broadcastGameState();
+
+        // Wait a moment before resetting for next round
         setTimeout(() => {
-            if (this.state === 'roundEnd') {  // Only start new round if we're still in roundEnd state
-                this.startNewRound();
-                this.broadcastGameState();
+            // Reset game state for next round
+            this.state = 'betting';
+            this.currentTurn = null;
+            this.dealer = {
+                cards: [],
+                score: 0
+            };
+
+            // Reset player states but keep their chips
+            this.players.forEach(player => {
+                player.cards = [];
+                player.score = 0;
+                player.bet = 0;
+                player.finished = false;
+                player.insuranceBet = 0;
+                player.result = null;
+                player.canDoubleDown = false;
+            });
+
+            // Clear any pending dealer timer
+            if (this.dealerTimer) {
+                clearTimeout(this.dealerTimer);
+                this.dealerTimer = null;
             }
-        }, 5000);
+
+            // Broadcast the reset state
+            this.broadcastGameState();
+            
+            // Prompt for new bets
+            this.io.to(this.id).emit('gameMessage', {
+                type: 'info',
+                message: '🎲 New round! Place your bets!'
+            });
+        }, 3000); // Wait 3 seconds before starting new round
+    }
+
+    dealerPlay() {
+        if (this.state !== 'dealer') return;
+
+        const dealerScore = this.calculateScore(this.dealer.cards);
+        if (dealerScore < 17) {
+            const card = this.deck.drawCard();
+            this.dealer.cards.push(card);
+            this.dealer.score = this.calculateScore(this.dealer.cards);
+            
+            // Broadcast new state
+            this.broadcastGameState();
+            
+            // Send dealer action message
+            this.io.to(this.id).emit('gameMessage', {
+                type: 'dealer',
+                message: `🎲 Dealer draws ${this.getCardDescription(card)}`
+            });
+            
+            // Continue dealer play after delay
+            this.startDealerTimer();
+        } else {
+            // Send dealer final score message
+            const finalScore = this.calculateScore(this.dealer.cards);
+            if (finalScore > 21) {
+                this.io.to(this.id).emit('gameMessage', {
+                    type: 'dealer',
+                    message: `💥 Dealer busts with ${finalScore}!`
+                });
+            } else {
+                this.io.to(this.id).emit('gameMessage', {
+                    type: 'dealer',
+                    message: `✋ Dealer stands with ${finalScore}`
+                });
+            }
+            
+            // End the round after a short delay
+            setTimeout(() => this.endRound(), 1000);
+        }
     }
 
     calculateScore(cards) {
@@ -1032,29 +1062,53 @@ class BlackjackTable {
 }
 
 class Deck {
-    constructor() {
+    constructor(serverSeed = null, clientSeed = null) {
         this.cards = [];
         this.suits = ['♠', '♥', '♣', '♦'];
         this.values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        
+        // Always generate new seeds if not provided
+        this.serverSeed = serverSeed || ProvablyFair.generateServerSeed();
+        this.clientSeed = clientSeed || crypto.randomBytes(32).toString('hex');
+        this.verificationHash = null;
 
+        // Initialize deck
         for (const suit of this.suits) {
             for (const value of this.values) {
                 this.cards.push({ suit, value });
             }
         }
 
+        // Always shuffle on creation
         this.shuffle();
     }
 
     shuffle() {
-        for (let i = this.cards.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
-        }
+        // Generate verification hash
+        this.verificationHash = ProvablyFair.generateHash(this.serverSeed, this.clientSeed);
+        
+        // Use provably fair shuffle
+        this.cards = ProvablyFair.provablyFairShuffle([...this.cards], this.verificationHash);
+        
+        console.log('[Deck] Shuffled with new seeds:', {
+            serverSeed: this.serverSeed.slice(0, 8) + '...',
+            clientSeed: this.clientSeed.slice(0, 8) + '...',
+            verificationHash: this.verificationHash.slice(0, 8) + '...',
+            firstCard: this.cards[0]
+        });
     }
 
     drawCard() {
         return this.cards.pop();
+    }
+
+    getVerificationData() {
+        return {
+            serverSeed: this.serverSeed,
+            clientSeed: this.clientSeed,
+            verificationHash: this.verificationHash,
+            initialDeck: this.cards
+        };
     }
 }
 
@@ -1282,6 +1336,23 @@ io.on('connection', (socket) => {
             username: player.username,
             message: message
         });
+    });
+
+    socket.on('startRound', () => {
+        const table = GameState.findTableBySocket(socket.id);
+        if (!table) return;
+
+        // Check if the player has placed a bet
+        const player = table.players.find(p => p.socketId === socket.id);
+        if (!player || player.bet === 0) {
+            socket.emit('gameMessage', {
+                type: 'error',
+                message: '❌ You must place a bet before starting the round'
+            });
+            return;
+        }
+
+        table.startNewRound();
     });
 });
 
