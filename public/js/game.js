@@ -85,44 +85,41 @@ class BlackjackGame {
     }
 
     initializeVerificationUI() {
-        // Create verification button
-        const verifyBtn = document.createElement('button');
-        verifyBtn.id = 'verify-fairness';
-        verifyBtn.className = 'btn btn-info';
-        verifyBtn.textContent = 'Verify Fairness';
-        const gameControls = document.querySelector('.game-controls');
-        if (gameControls) {
-            gameControls.appendChild(verifyBtn);
+        // Create verification button if it doesn't exist
+        if (!this.elements.verifyBtn) {
+            const verifyBtn = document.createElement('button');
+            verifyBtn.id = 'verify-fairness';
+            verifyBtn.className = 'btn btn-info';
+            verifyBtn.textContent = 'Verify Fairness';
+            document.querySelector('.game-controls').appendChild(verifyBtn);
             this.elements.verifyBtn = verifyBtn;
         }
 
-        // Create modal
-        const modal = document.createElement('div');
-        modal.id = 'verification-modal';
-        modal.className = 'modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <span class="close" id="close-verification">&times;</span>
-                <h2>Provably Fair Verification</h2>
-                <div id="verification-content">
-                    <p>No verification data available yet.</p>
+        // Create modal if it doesn't exist
+        if (!this.elements.verificationModal) {
+            const modal = document.createElement('div');
+            modal.id = 'verification-modal';
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <span class="close" id="close-verification">&times;</span>
+                    <h2>Provably Fair Verification</h2>
+                    <div id="verification-content">
+                        <p>No verification data available yet.</p>
+                    </div>
                 </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-        this.elements.verificationModal = modal;
-        this.elements.verificationContent = modal.querySelector('#verification-content');
-        this.elements.closeVerificationModal = modal.querySelector('#close-verification');
+            `;
+            document.body.appendChild(modal);
+            this.elements.verificationModal = modal;
+            this.elements.verificationContent = modal.querySelector('#verification-content');
+            this.elements.closeVerificationModal = modal.querySelector('#close-verification');
+        }
 
-        // Add event listeners for verification UI
-        if (this.elements.verifyBtn) {
-            this.elements.verifyBtn.addEventListener('click', () => this.showVerification());
-        }
-        if (this.elements.closeVerificationModal) {
-            this.elements.closeVerificationModal.addEventListener('click', () => {
-                this.elements.verificationModal.style.display = 'none';
-            });
-        }
+        // Add event listeners
+        this.elements.verifyBtn.addEventListener('click', () => this.showVerification());
+        this.elements.closeVerificationModal.addEventListener('click', () => {
+            this.elements.verificationModal.style.display = 'none';
+        });
     }
 
     setupEventListeners() {
@@ -268,7 +265,7 @@ class BlackjackGame {
 
         this.socket.on('verificationData', (data) => {
             this.verificationData = data;
-            if (this.elements.verificationContent.style.display === 'block') {
+            if (this.elements.verificationModal.style.display === 'block') {
                 this.showVerification();
             }
         });
@@ -899,59 +896,36 @@ class BlackjackGame {
         document.head.appendChild(style);
     }
 
-    initializeVerificationUI() {
-        // Create verification button if it doesn't exist
-        if (!this.elements.verifyBtn) {
-            const verifyBtn = document.createElement('button');
-            verifyBtn.id = 'verify-fairness';
-            verifyBtn.className = 'btn btn-info';
-            verifyBtn.textContent = 'Verify Fairness';
-            document.querySelector('.game-controls').appendChild(verifyBtn);
-            this.elements.verifyBtn = verifyBtn;
-        }
-
-        // Create modal if it doesn't exist
-        if (!this.elements.verificationModal) {
-            const modal = document.createElement('div');
-            modal.id = 'verification-modal';
-            modal.className = 'modal';
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <span class="close" id="close-verification">&times;</span>
-                    <h2>Provably Fair Verification</h2>
-                    <div id="verification-content">
-                        <p>No verification data available yet.</p>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            this.elements.verificationModal = modal;
-            this.elements.verificationContent = modal.querySelector('#verification-content');
-            this.elements.closeVerificationModal = modal.querySelector('#close-verification');
-        }
-
-        // Add event listeners
-        this.elements.verifyBtn.addEventListener('click', () => this.showVerification());
-        this.elements.closeVerificationModal.addEventListener('click', () => {
-            this.elements.verificationModal.style.display = 'none';
-        });
-    }
-
     showVerification() {
+        // Request fresh verification data from server
+        this.socket.emit('requestVerification', { tableId: this.tableId });
+        
         if (!this.verificationData) {
-            this.elements.verificationContent.innerHTML = '<p>No verification data available yet.</p>';
+            this.elements.verificationContent.innerHTML = '<p>Loading verification data...</p>';
         } else {
             const { serverSeed, clientSeed, verificationHash, initialDeck } = this.verificationData;
+            let deckStateHtml = '';
+            
+            if (initialDeck) {
+                deckStateHtml = `
+                    <h4>Initial Deck State</h4>
+                    <div class="deck-state">
+                        ${this.formatDeckState(initialDeck)}
+                    </div>`;
+            } else {
+                deckStateHtml = `
+                    <div class="deck-state-hidden">
+                        <p><em>⚠️ Deck state will be revealed when the round ends</em></p>
+                    </div>`;
+            }
+
             this.elements.verificationContent.innerHTML = `
                 <div class="verification-details">
                     <h3>Current Round Verification Data</h3>
                     <p><strong>Server Seed:</strong> ${serverSeed}</p>
                     <p><strong>Client Seed:</strong> ${clientSeed}</p>
                     <p><strong>Verification Hash:</strong> ${verificationHash}</p>
-                    <h4>Initial Deck State</h4>
-                    <div class="deck-state">
-                        ${this.formatDeckState(initialDeck)}
-                    </div>
+                    ${deckStateHtml}
                     <div class="verification-instructions">
                         <h3>How to Verify:</h3>
                         <ol>

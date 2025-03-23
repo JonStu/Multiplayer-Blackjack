@@ -292,48 +292,39 @@ class BlackjackTable {
     }
 
     startNewRound() {
-        // Check if any players have placed bets
-        const playersWithBets = this.players.filter(player => player.bet > 0);
-        if (playersWithBets.length === 0) {
-            console.log('[Server] Cannot start round: no players have placed bets');
-            return false;
-        }
-
-        // Reset game state
+        console.log('[Table] Starting new round');
         this.state = 'betting';
         this.currentTurn = null;
-        this.dealer = {
-            cards: [],
-            score: 0
-        };
+        this.dealer = { cards: [], score: 0 };
         
-        // Reset player states for those who haven't bet
+        // Create and shuffle a new deck
+        this.deck = new Deck();
+        this.deck.setCanRevealDeck(false); // Hide deck at start of round
+        
+        // Reset all players
         this.players.forEach(player => {
-            if (player.bet === 0) {
-                player.cards = [];
-                player.score = 0;
-                player.finished = false;
-                player.insuranceBet = 0;
-                player.result = null;
-            }
+            player.cards = [];
+            player.bet = 0;
+            player.finished = false;
+            player.insuranceBet = 0;
+            player.result = null;
+            player.canDoubleDown = false;
         });
 
-        // Create new deck with fresh seeds
-        const clientSeed = crypto.randomBytes(32).toString('hex');
-        const serverSeed = crypto.randomBytes(32).toString('hex');
-        this.deck = new Deck(serverSeed, clientSeed);
-        
-        // Broadcast verification data to all players
-        this.io.to(this.id).emit('verificationData', this.deck.getVerificationData());
-        
-        // Only deal cards if we have players with bets
-        if (playersWithBets.length > 0) {
-            this.dealInitialCards();
-            this.state = 'playing';
-            this.broadcastGameState();
-            return true;
+        // Clear any pending dealer timer
+        if (this.dealerTimer) {
+            clearTimeout(this.dealerTimer);
+            this.dealerTimer = null;
         }
-        return false;
+
+        // Broadcast the reset state
+        this.broadcastGameState();
+        
+        // Prompt for new bets
+        this.io.to(this.id).emit('gameMessage', {
+            type: 'info',
+            message: '🎲 New round! Place your bets!'
+        });
     }
 
     dealInitialCards() {
@@ -692,6 +683,11 @@ class BlackjackTable {
     endRound() {
         console.log('[Dealer] Ending round');
         
+        // Allow deck to be revealed now that round is over
+        if (this.deck) {
+            this.deck.setCanRevealDeck(true);
+        }
+        
         // Calculate results and update chips
         const dealerScore = this.calculateScore(this.dealer.cards);
         const dealerBust = dealerScore > 21;
@@ -707,21 +703,21 @@ class BlackjackTable {
                 
                 if (playerBust) {
                     result = 'lose';
-                    message = `💥 ${player.username} loses with bust (${playerScore})`;
+                    message = `💥 ${player.username} busts with ${playerScore}! Lost ${player.bet} chips.`;
                 } else if (dealerBust) {
                     result = 'win';
-                    message = `🎉 ${player.username} wins! Dealer bust with ${dealerScore}`;
+                    message = `🎉 ${player.username} wins! Dealer bust with ${dealerScore}. Won ${player.bet} chips.`;
                     player.chips += player.bet * 2; // Return bet + winnings
                 } else if (playerScore > dealerScore) {
                     result = 'win';
-                    message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}`;
+                    message = `🎉 ${player.username} wins with ${playerScore} vs dealer's ${dealerScore}. Won ${player.bet} chips.`;
                     player.chips += player.bet * 2; // Return bet + winnings
                 } else if (playerScore < dealerScore) {
                     result = 'lose';
-                    message = `😢 ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}`;
+                    message = `😢 ${player.username} loses with ${playerScore} vs dealer's ${dealerScore}. Lost ${player.bet} chips.`;
                 } else {
                     result = 'push';
-                    message = `🤝 ${player.username} pushes with ${playerScore}`;
+                    message = `🤝 ${player.username} pushes with ${playerScore}.`;
                     player.chips += player.bet; // Return bet on push
                 }
                 
@@ -1072,6 +1068,7 @@ class Deck {
         this.clientSeed = clientSeed || crypto.randomBytes(32).toString('hex');
         this.nonce = 0;
         this.verificationHash = null;
+        this.canRevealDeck = false; // Add flag to control deck revelation
 
         // Initialize deck
         for (const suit of this.suits) {
@@ -1082,8 +1079,6 @@ class Deck {
 
         // Always shuffle on creation
         this.shuffle();
-        console.log('\x1b[32m%s\x1b[0m', `[PROVABLY FAIR] Server Seed: ${this.serverSeed}`);
-        console.log('\x1b[32m%s\x1b[0m', `[PROVABLY FAIR] Client Seed: ${this.clientSeed}`);
     }
 
     generateHash() {
@@ -1093,7 +1088,6 @@ class Deck {
 
     shuffle() {
         const hash = this.generateHash();
-        console.log('\x1b[36m%s\x1b[0m', `[PROVABLY FAIR] Round ${this.nonce} Hash: ${hash}`);
         
         // Fisher-Yates shuffle using the hash as entropy
         for (let i = this.cards.length - 1; i > 0; i--) {
@@ -1103,33 +1097,39 @@ class Deck {
         }
         
         this.nonce++;
-        
-        // Log the shuffle for verification
-        console.log('[Deck] Shuffled with new seeds:', {
-            serverSeed: this.serverSeed.slice(0, 8) + '...',
-            clientSeed: this.clientSeed.slice(0, 8) + '...',
-            verificationHash: hash.slice(0, 8) + '...',
-            firstCard: this.cards[0]
-        });
-        
         return this.cards;
     }
 
     drawCard() {
         if (this.cards.length === 0) {
-            console.log('\x1b[33m%s\x1b[0m', '[PROVABLY FAIR] Reshuffling deck...');
             this.serverSeed = crypto.randomBytes(32).toString('hex');
             this.shuffle();
         }
-        return this.cards.pop();
+        return this.cards.shift(); 
     }
 
     getVerificationData() {
-        return {
+        // Generate the verification hash for the current state
+        const verificationHash = this.generateHash();
+        
+        // Only include deck state if allowed to reveal
+        const verificationData = {
             serverSeed: this.serverSeed,
             clientSeed: this.clientSeed,
-            nonce: this.nonce - 1
+            nonce: this.nonce - 1,
+            verificationHash
         };
+
+        // Only include deck state if round is over
+        if (this.canRevealDeck) {
+            verificationData.initialDeck = [...this.cards];
+        }
+
+        return verificationData;
+    }
+
+    setCanRevealDeck(value) {
+        this.canRevealDeck = value;
     }
 }
 
@@ -1357,6 +1357,18 @@ io.on('connection', (socket) => {
             username: player.username,
             message: message
         });
+    });
+
+    socket.on('requestVerification', ({ tableId }) => {
+        const table = GameState.tables.get(tableId);
+        if (!table || !table.deck) {
+            socket.emit('verificationData', null);
+            return;
+        }
+
+        // Get verification data from the current deck
+        const verificationData = table.deck.getVerificationData();
+        socket.emit('verificationData', verificationData);
     });
 
     socket.on('startRound', () => {
