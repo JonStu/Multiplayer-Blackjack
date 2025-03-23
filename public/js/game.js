@@ -13,7 +13,7 @@ class BlackjackGame {
         });
         this.playerHand = [];
         this.dealerHand = [];
-        this.gameState = 'betting'; // betting, playing, dealer, ended
+        this.gameState = 'betting';
         this.playerScore = 0;
         this.chips = 1000;
         this.currentBet = 0;
@@ -23,10 +23,11 @@ class BlackjackGame {
         this.canDoubleDown = false;
         this.showOtherPlayersCards = false;
         this.lastPlayersUpdate = null;
-        this.lastMessage = ''; // Track last message to prevent duplicates
+        this.lastMessage = '';
         this.lastMessageTime = 0;
-        this.messageQueue = []; // Queue for handling message timing
-        this.processingMessages = false; // Flag to track if we're processing messages
+        this.messageQueue = [];
+        this.processingMessages = false;
+        this.verificationData = null;
 
         // Connection monitoring
         this.lastPong = Date.now();
@@ -34,36 +35,16 @@ class BlackjackGame {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
 
-        // Start connection monitoring
-        this.startConnectionMonitoring();
-
-        // Card mappings for proper display
-        this.valueMap = {
-            'A': 'ace',
-            'K': 'king',
-            'Q': 'queen',
-            'J': 'jack',
-            '10': '10',
-            '9': '9',
-            '8': '8',
-            '7': '7',
-            '6': '6',
-            '5': '5',
-            '4': '4',
-            '3': '3',
-            '2': '2'
-        };
-
-        this.suitMap = {
-            '♠': 'spade',
-            '♥': 'heart',
-            '♣': 'club',
-            '♦': 'diamond'
-        };
-
+        // Initialize UI first
         this.initializeElements();
+        this.initializeVerificationUI();
+        
+        // Then set up event listeners and socket handlers
         this.setupEventListeners();
         this.setupSocketListeners();
+        
+        // Start connection monitoring and join game
+        this.startConnectionMonitoring();
         this.joinGame();
         this.addDealerStyles();
     }
@@ -73,7 +54,7 @@ class BlackjackGame {
             dealerCards: document.getElementById('dealer-cards'),
             playerCards: document.getElementById('player-cards'),
             playerScore: document.getElementById('player-score'),
-            chatMessages: document.getElementById('chat-messages'), // Changed from 'chat-box' to 'chat-messages'
+            chatMessages: document.getElementById('chat-messages'),
             chipsDisplay: document.getElementById('chips-count'),
             hitBtn: document.getElementById('hit-btn'),
             standBtn: document.getElementById('stand-btn'),
@@ -90,62 +71,126 @@ class BlackjackGame {
             chatInput: document.getElementById('chat-input'),
             chatSend: document.getElementById('chat-send'),
             toggleCardsBtn: document.getElementById('toggle-cards-btn'),
-            doubleDownBtn: document.getElementById('double-down-btn')
+            doubleDownBtn: document.getElementById('double-down-btn'),
+            verifyBtn: null,
+            verificationModal: null,
+            verificationContent: null,
+            closeVerificationModal: null
         };
 
-        // Set player name
+        // Set player name if element exists
         if (this.elements.playerName) {
             this.elements.playerName.textContent = this.username;
         }
+    }
 
-        // Update chips display
-        if (this.elements.chipsDisplay) {
-            this.elements.chipsDisplay.textContent = this.chips;
+    initializeVerificationUI() {
+        // Create verification button
+        const verifyBtn = document.createElement('button');
+        verifyBtn.id = 'verify-fairness';
+        verifyBtn.className = 'btn btn-info';
+        verifyBtn.textContent = 'Verify Fairness';
+        const gameControls = document.querySelector('.game-controls');
+        if (gameControls) {
+            gameControls.appendChild(verifyBtn);
+            this.elements.verifyBtn = verifyBtn;
         }
 
-        // Log any missing elements
-        Object.entries(this.elements).forEach(([key, element]) => {
-            if (!element) {
-                console.warn(`[Client] Missing UI element: ${key}`);
-            }
-        });
+        // Create modal
+        const modal = document.createElement('div');
+        modal.id = 'verification-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="close" id="close-verification">&times;</span>
+                <h2>Provably Fair Verification</h2>
+                <div id="verification-content">
+                    <p>No verification data available yet.</p>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        this.elements.verificationModal = modal;
+        this.elements.verificationContent = modal.querySelector('#verification-content');
+        this.elements.closeVerificationModal = modal.querySelector('#close-verification');
+
+        // Add event listeners for verification UI
+        if (this.elements.verifyBtn) {
+            this.elements.verifyBtn.addEventListener('click', () => this.showVerification());
+        }
+        if (this.elements.closeVerificationModal) {
+            this.elements.closeVerificationModal.addEventListener('click', () => {
+                this.elements.verificationModal.style.display = 'none';
+            });
+        }
     }
 
     setupEventListeners() {
-        this.elements.hitBtn.addEventListener('click', () => this.hit());
-        this.elements.standBtn.addEventListener('click', () => this.stand());
-        this.elements.dealBtn.addEventListener('click', () => this.startNewGame());
-        this.elements.placeBetBtn.addEventListener('click', () => this.placeBet());
-        this.elements.acceptInsurance.addEventListener('click', () => this.takeInsurance());
-        this.elements.declineInsurance.addEventListener('click', () => this.hideInsurancePrompt());
-        this.elements.doubleDownBtn.addEventListener('click', () => this.doubleDown()); // Add this line
-        
+        // Only add event listeners if elements exist
+        if (this.elements.hitBtn) {
+            this.elements.hitBtn.addEventListener('click', () => this.hit());
+        }
+        if (this.elements.standBtn) {
+            this.elements.standBtn.addEventListener('click', () => this.stand());
+        }
+        if (this.elements.dealBtn) {
+            this.elements.dealBtn.addEventListener('click', () => this.startNewGame());
+        }
+        if (this.elements.placeBetBtn && this.elements.betInput) {
+            this.elements.placeBetBtn.addEventListener('click', () => this.placeBet());
+        }
+        if (this.elements.acceptInsurance) {
+            this.elements.acceptInsurance.addEventListener('click', () => this.takeInsurance());
+        }
+        if (this.elements.declineInsurance) {
+            this.elements.declineInsurance.addEventListener('click', () => this.hideInsurancePrompt());
+        }
+        if (this.elements.doubleDownBtn) {
+            this.elements.doubleDownBtn.addEventListener('click', () => this.doubleDown());
+        }
         // Add chat event listeners
-        this.elements.chatSend.addEventListener('click', () => this.sendChatMessage());
-        this.elements.chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.sendChatMessage();
-            }
-        });
+        if (this.elements.chatSend) {
+            this.elements.chatSend.addEventListener('click', () => this.sendChatMessage());
+        }
+        if (this.elements.chatInput) {
+            this.elements.chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.sendChatMessage();
+                }
+            });
+        }
 
         // Add bet input validation
-        this.elements.betInput.addEventListener('input', (e) => {
-            const value = parseInt(e.target.value);
-            if (value > this.chips) {
-                e.target.value = this.chips;
-                this.showMessage('Maximum bet is ' + this.chips + ' chips', 'warning');
-            } else if (value < 1) {
-                e.target.value = 1;
-                this.showMessage('Minimum bet is 1 chip', 'warning');
-            }
-        });
+        if (this.elements.betInput) {
+            this.elements.betInput.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                if (value > this.chips) {
+                    e.target.value = this.chips;
+                    this.showMessage('Maximum bet is ' + this.chips + ' chips', 'warning');
+                } else if (value < 1) {
+                    e.target.value = 1;
+                    this.showMessage('Minimum bet is 1 chip', 'warning');
+                }
+            });
+        }
 
         // Add toggle cards button listener
-        this.elements.toggleCardsBtn.addEventListener('click', () => {
-            this.showOtherPlayersCards = !this.showOtherPlayersCards;
-            this.elements.toggleCardsBtn.textContent = this.showOtherPlayersCards ? 'Hide Other Cards' : 'Show Other Cards';
-            this.updateOtherPlayers(this.lastPlayersUpdate || []);
-        });
+        if (this.elements.toggleCardsBtn) {
+            this.elements.toggleCardsBtn.addEventListener('click', () => {
+                this.showOtherPlayersCards = !this.showOtherPlayersCards;
+                this.elements.toggleCardsBtn.textContent = this.showOtherPlayersCards ? 'Hide Other Cards' : 'Show Other Cards';
+                this.updateOtherPlayers(this.lastPlayersUpdate || []);
+            });
+        }
+
+        if (this.elements.verifyBtn) {
+            this.elements.verifyBtn.addEventListener('click', () => this.showVerification());
+        }
+        if (this.elements.closeVerificationModal) {
+            this.elements.closeVerificationModal.addEventListener('click', () => {
+                this.elements.verificationModal.style.display = 'none';
+            });
+        }
     }
 
     setupSocketListeners() {
@@ -220,6 +265,13 @@ class BlackjackGame {
             console.log('[Client] Player turn update:', data);
             this.handlePlayerTurn(data);
         });
+
+        this.socket.on('verificationData', (data) => {
+            this.verificationData = data;
+            if (this.elements.verificationContent.style.display === 'block') {
+                this.showVerification();
+            }
+        });
     }
 
     joinGame() {
@@ -290,27 +342,14 @@ class BlackjackGame {
 
     async placeBet() {
         const betAmount = parseInt(this.elements.betInput.value);
-        if (isNaN(betAmount) || betAmount <= 0) {
-            this.showMessage('❌ Please enter a valid bet amount', 'error');
-            return;
+        if (betAmount > 0 && betAmount <= this.chips) {
+            this.socket.emit('placeBet', { amount: betAmount });
+            this.elements.placeBetBtn.disabled = true;
+            this.elements.betInput.disabled = true;
+            this.elements.dealBtn.disabled = false;  // Enable deal button after bet is placed
+        } else {
+            this.showMessage('Invalid bet amount', 'error');
         }
-        
-        if (betAmount > this.chips) {
-            this.showMessage('❌ Not enough chips for this bet', 'error');
-            return;
-        }
-
-        this.socket.emit('placeBet', { 
-            amount: betAmount,
-            tableId: this.tableId
-        });
-
-        this.currentBet = betAmount;
-        this.chips -= betAmount;
-        this.updateChipsDisplay();
-        this.elements.placeBetBtn.disabled = true;
-        this.elements.betInput.disabled = true;
-        this.showMessage(`💰 Bet placed: ${betAmount} chips`, 'info');
     }
 
     async hit() {
@@ -364,7 +403,7 @@ class BlackjackGame {
             this.playerScore = playerData.score;
             this.chips = playerData.chips;
             this.currentBet = playerData.bet;
-            this.canDoubleDown = playerData.canDoubleDown; // Add this line
+            this.canDoubleDown = playerData.canDoubleDown;
         }
         
         // Update UI
@@ -376,20 +415,39 @@ class BlackjackGame {
     }
 
     updateControls() {
-        const isPlayerTurn = this.currentTurn === this.username;
-        const isPlaying = this.gameState === 'playing';
-        
-        this.elements.hitBtn.disabled = !isPlayerTurn || !isPlaying;
-        this.elements.standBtn.disabled = !isPlayerTurn || !isPlaying;
-        this.elements.dealBtn.disabled = this.gameState !== 'betting';
-        this.elements.placeBetBtn.disabled = this.gameState !== 'betting';
-        this.elements.betInput.disabled = this.gameState !== 'betting';
-        
-        // Update double down button state
-        if (this.elements.doubleDownBtn) {
-            const canDoubleDown = isPlayerTurn && isPlaying && this.canDoubleDown;
-            this.elements.doubleDownBtn.disabled = !canDoubleDown;
-            this.elements.doubleDownBtn.style.display = isPlaying ? 'inline-block' : 'none';
+        // Disable all action buttons by default
+        this.elements.hitBtn.disabled = true;
+        this.elements.standBtn.disabled = true;
+        this.elements.doubleDownBtn.disabled = true;
+        this.elements.dealBtn.disabled = true;
+        this.elements.placeBetBtn.disabled = true;
+        this.elements.betInput.disabled = true;
+
+        if (this.gameState === 'betting') {
+            // Only enable betting controls if player has chips
+            if (this.chips > 0) {
+                this.elements.placeBetBtn.disabled = false;
+                this.elements.betInput.disabled = false;
+                this.elements.dealBtn.disabled = true; // Always disabled in betting state until bet is placed
+            }
+        } else if (this.gameState === 'playing') {
+            if (this.currentTurn === this.username) {
+                this.elements.hitBtn.disabled = false;
+                this.elements.standBtn.disabled = false;
+                if (this.canDoubleDown && this.chips >= this.currentBet) {
+                    this.elements.doubleDownBtn.disabled = false;
+                }
+            }
+        }
+
+        // Only enable deal button if a bet has been placed
+        if (this.gameState === 'betting' && this.currentBet > 0) {
+            this.elements.dealBtn.disabled = false;
+        }
+
+        // Update bet input max value
+        if (this.elements.betInput) {
+            this.elements.betInput.max = this.chips;
         }
     }
 
@@ -841,6 +899,83 @@ class BlackjackGame {
         document.head.appendChild(style);
     }
 
+    initializeVerificationUI() {
+        // Create verification button if it doesn't exist
+        if (!this.elements.verifyBtn) {
+            const verifyBtn = document.createElement('button');
+            verifyBtn.id = 'verify-fairness';
+            verifyBtn.className = 'btn btn-info';
+            verifyBtn.textContent = 'Verify Fairness';
+            document.querySelector('.game-controls').appendChild(verifyBtn);
+            this.elements.verifyBtn = verifyBtn;
+        }
+
+        // Create modal if it doesn't exist
+        if (!this.elements.verificationModal) {
+            const modal = document.createElement('div');
+            modal.id = 'verification-modal';
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <span class="close" id="close-verification">&times;</span>
+                    <h2>Provably Fair Verification</h2>
+                    <div id="verification-content">
+                        <p>No verification data available yet.</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            this.elements.verificationModal = modal;
+            this.elements.verificationContent = modal.querySelector('#verification-content');
+            this.elements.closeVerificationModal = modal.querySelector('#close-verification');
+        }
+
+        // Add event listeners
+        this.elements.verifyBtn.addEventListener('click', () => this.showVerification());
+        this.elements.closeVerificationModal.addEventListener('click', () => {
+            this.elements.verificationModal.style.display = 'none';
+        });
+    }
+
+    showVerification() {
+        if (!this.verificationData) {
+            this.elements.verificationContent.innerHTML = '<p>No verification data available yet.</p>';
+        } else {
+            const { serverSeed, clientSeed, verificationHash, initialDeck } = this.verificationData;
+            this.elements.verificationContent.innerHTML = `
+                <div class="verification-details">
+                    <h3>Current Round Verification Data</h3>
+                    <p><strong>Server Seed:</strong> ${serverSeed}</p>
+                    <p><strong>Client Seed:</strong> ${clientSeed}</p>
+                    <p><strong>Verification Hash:</strong> ${verificationHash}</p>
+                    <h4>Initial Deck State</h4>
+                    <div class="deck-state">
+                        ${this.formatDeckState(initialDeck)}
+                    </div>
+                    <div class="verification-instructions">
+                        <h3>How to Verify:</h3>
+                        <ol>
+                            <li>Copy the server seed and client seed</li>
+                            <li>Generate HMAC SHA256 hash using server seed as key and client seed as message</li>
+                            <li>Use the resulting hash to shuffle a fresh deck following Fisher-Yates algorithm</li>
+                            <li>Compare the resulting deck order with the initial deck state shown above</li>
+                        </ol>
+                    </div>
+                </div>
+            `;
+        }
+        this.elements.verificationModal.style.display = 'block';
+    }
+
+    formatDeckState(deck) {
+        if (!deck) return 'Deck information not available';
+        return deck.map((card, index) => 
+            `<span class="card-state ${card.suit === '♥' || card.suit === '♦' ? 'red' : 'black'}">
+                ${card.value}${card.suit}
+            </span>`
+        ).join(' ');
+    }
+
     async handleDealerTurn(data) {
         console.log('[Client] Dealer turn started:', data);
         
@@ -933,7 +1068,7 @@ class BlackjackGame {
         this.elements.hitBtn.disabled = true;
         this.elements.standBtn.disabled = true;
         this.elements.doubleDownBtn.disabled = true;
-        this.elements.placeBetBtn.disabled = false;  // Changed from betBtn to placeBetBtn
+        this.elements.placeBetBtn.disabled = false;  
         this.elements.betInput.disabled = false;
         
         // Update display
