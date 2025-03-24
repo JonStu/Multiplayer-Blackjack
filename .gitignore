@@ -6,3 +6,4 @@ node_modules/
 __pycache__/
 *.pyc
 data/users.json
+public/js/Working.js
